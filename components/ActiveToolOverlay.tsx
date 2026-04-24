@@ -244,23 +244,34 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
     // 1. Interactive Blog Studio
     if (result.type === 'blog') {
       const getBlogHTML = () => {
-        let html = `<h1>${result.finalPost.title}</h1>`;
-        html += `<h3>${result.finalPost.subtitle}</h3>`;
-        html += `<img src="${result.finalPost.imageUrl}" alt="Banner" style="width: 100%; height: auto; border-radius: 8px; margin-bottom: 20px;" />`;
+        let html = `<article style="font-family: sans-serif; color: #333; line-height: 1.6; max-width: 800px; margin: auto;">`;
+        html += `<h1 style="font-size: 2.5rem; margin-bottom: 0.5rem; color: #000;">${result.finalPost.title}</h1>`;
+        html += `<p style="font-size: 1.25rem; color: #666; font-style: italic; margin-bottom: 2rem;">${result.finalPost.subtitle}</p>`;
+        html += `<img src="${result.finalPost.imageUrl}" alt="Banner" style="width: 100%; height: auto; border-radius: 12px; margin-bottom: 2rem; box-shadow: 0 4px 12px rgba(0,0,0,0.1);" />`;
         
         result.finalPost.blocks.forEach(block => {
           switch (block.type) {
-            case 'heading': html += `<h${block.level}>${block.content}</h${block.level}>`; break;
-            case 'paragraph': html += `<p>${block.content}</p>`; break;
-            case 'quote': html += `<blockquote style="border-left: 4px solid #06b6d4; padding-left: 1rem; font-style: italic;">${block.content}</blockquote>`; break;
+            case 'heading': 
+              const size = block.level === 2 ? '1.75rem' : '1.5rem';
+              html += `<h${block.level} style="font-size: ${size}; margin-top: 2rem; margin-bottom: 1rem; color: #111;">${block.content}</h${block.level}>`; 
+              break;
+            case 'paragraph': 
+              html += `<p style="margin-bottom: 1.5rem;">${block.content}</p>`; 
+              break;
+            case 'quote': 
+              html += `<blockquote style="border-left: 4px solid #06b6d4; padding: 1rem 1.5rem; font-style: italic; color: #444; background: #f9fafb; margin: 2rem 0;">${block.content}</blockquote>`; 
+              break;
             case 'list': 
-              html += `<ul>`;
-              block.items?.forEach(item => html += `<li>${item}</li>`);
+              html += `<ul style="margin-bottom: 1.5rem; padding-left: 1.5rem;">`;
+              block.items?.forEach(item => html += `<li style="margin-bottom: 0.5rem;">${item}</li>`);
               html += `</ul>`;
               break;
-            case 'separator': html += `<hr />`; break;
+            case 'separator': 
+              html += `<hr style="border: 0; border-top: 1px solid #eee; margin: 3rem 0;" />`; 
+              break;
           }
         });
+        html += `</article>`;
         return html;
       };
 
@@ -287,7 +298,9 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
       const handleShareToBlogger = () => {
         const title = encodeURIComponent(result.finalPost.title);
         const body = encodeURIComponent(getBlogHTML());
-        window.open(`https://www.blogger.com/blog-post.g?t=${title}&b=${body}`, '_blank');
+        // Attempting a legacy URL format that often redirects correctly to the draft editor
+        const bloggerUrl = `https://www.blogger.com/blog-post.g?blogID=&t=${title}&b=${body}`;
+        window.open(bloggerUrl, '_blank');
       };
 
       if (blogStep === 'ideas') {
@@ -443,28 +456,37 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
       return (
         <div className="flex flex-col md:flex-row gap-8 items-start justify-center">
           <div className="flex-1 w-full flex flex-col items-center">
-             <div ref={exportRef} className="relative w-[320px] aspect-[9/16] rounded-2xl overflow-hidden shadow-2xl group border border-white/10">
-                <img src={result.imageUrl} className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105" alt="Ad Creative" crossOrigin="anonymous" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-90" />
-                <div className="absolute bottom-0 left-0 right-0 p-8 text-center">
-                   <h2 className="text-2xl font-bold text-white leading-tight mb-6 drop-shadow-xl">{result.headline}</h2>
-                   <div className="inline-block bg-white text-black font-bold py-3 px-8 rounded-full uppercase tracking-widest text-xs shadow-lg transform transition-transform group-hover:scale-105">
+             <div ref={exportRef} className="relative w-[320px] max-w-full aspect-[9/16] rounded-2xl overflow-hidden shadow-2xl group border border-white/10 bg-black">
+                <img 
+                  src={result.imageUrl} 
+                  className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" 
+                  alt="Ad Creative" 
+                  crossOrigin="anonymous" 
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-sky-500/5 to-transparent opacity-90" />
+                <div className="absolute bottom-0 left-0 right-0 p-8 text-center pb-12">
+                   <h2 className="text-2xl font-black text-white leading-tight mb-8 drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)] italic uppercase tracking-tighter">{result.headline}</h2>
+                   <div className="inline-block bg-white text-black font-black py-4 px-10 rounded-full uppercase tracking-widest text-[10px] shadow-2xl transform transition-all group-hover:scale-105 active:scale-95 cursor-pointer">
                       {result.cta}
                    </div>
                 </div>
              </div>
           </div>
-          <div className="w-full md:w-64 space-y-4 shrink-0">
-             <div className="p-4 bg-white/5 rounded-xl border border-white/10">
-               <h4 className="text-xs text-slate-500 uppercase font-bold mb-2">Smart Copy</h4>
-               <p className="text-sm text-white">{result.headline}</p>
+          <div className="w-full md:w-80 space-y-4 shrink-0">
+             <div className="p-6 bg-white/5 rounded-2xl border border-white/10 backdrop-blur-md">
+               <h4 className="text-[10px] text-cyan-400 uppercase font-black mb-4 tracking-widest flex items-center gap-2">
+                 <Zap size={12} /> AI Strategy
+                </h4>
+               <p className="text-sm text-slate-300 leading-relaxed italic">"Designed with high-velocity triggers to capture urban dwell-time focus."</p>
              </div>
-             <Button onClick={handleExportPNG} className="w-full">
-               <Download size={16} className="mr-2" /> Export PNG
-             </Button>
-             <Button onClick={() => handleCopy(result.headline)} variant="secondary" className="w-full">
-               Copy Headline
-             </Button>
+             <div className="grid gap-3">
+               <Button onClick={handleExportPNG} className="w-full">
+                 <Download size={16} className="mr-2" /> Export to Social
+               </Button>
+               <Button onClick={() => handleCopy(result.headline)} variant="secondary" className="w-full">
+                 Copy Campaign Copy
+               </Button>
+             </div>
           </div>
         </div>
       );
@@ -498,7 +520,7 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
     if (result.type === 'video') {
       return (
         <div className="flex flex-col items-center space-y-6">
-           <div className="relative w-full max-w-sm aspect-[9/16] bg-black rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
+           <div className="relative w-full max-w-[320px] aspect-[9/16] bg-black rounded-[2.5rem] overflow-hidden border-[8px] border-slate-900 shadow-2xl ring-1 ring-white/10">
               <video 
                  src={result.videoUrl} 
                  className="w-full h-full object-cover" 
@@ -507,21 +529,43 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
                  loop 
                  playsInline
               />
-              <div className="absolute bottom-4 left-4 right-4 bg-white/10 backdrop-blur rounded-lg p-2 flex items-center gap-2">
-                 <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                 <div className="h-1 flex-1 bg-white/20 rounded-full overflow-hidden">
-                    <motion.div 
-                       className="h-full bg-white"
-                       animate={{ width: ["0%", "100%"] }}
-                       transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
-                    />
+              {/* Overlays */}
+              <div className="absolute inset-x-0 top-0 p-6 flex justify-between items-start pointer-events-none">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-500 border border-white/20" />
+                  <div className="text-[10px] font-bold text-white uppercase tracking-widest drop-shadow-md">One AI Hub</div>
+                </div>
+                <div className="bg-red-600 text-white text-[8px] font-black px-2 py-0.5 rounded-sm uppercase tracking-tighter animate-pulse">Live Rendering</div>
+              </div>
+
+              <div className="absolute inset-x-0 bottom-0 p-6 bg-gradient-to-t from-black/80 to-transparent pointer-events-none">
+                 <div className="flex items-center gap-3 mb-4">
+                    <div className="w-1.5 h-1.5 bg-white rounded-full animate-ping" />
+                    <span className="text-[10px] text-white/70 font-mono tracking-tighter">4.2k active viewers</span>
                  </div>
-                 <span className="text-[10px] font-mono">{result.duration}</span>
+                 <div className="space-y-2">
+                    <div className="h-1 w-full bg-white/20 rounded-full overflow-hidden">
+                       <motion.div 
+                          className="h-full bg-cyan-500"
+                          animate={{ width: ["0%", "100%"] }}
+                          transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+                       />
+                    </div>
+                    <div className="flex justify-between text-[8px] font-mono text-white/50">
+                       <span>{result.duration}</span>
+                       <span>Auto-Loop Enabled</span>
+                    </div>
+                 </div>
               </div>
            </div>
-           <Button variant="secondary" className="w-full max-w-sm">
-              <Download size={16} className="mr-2" /> Save Video
-           </Button>
+           <div className="w-full max-w-[320px] grid grid-cols-2 gap-3">
+             <Button variant="primary" className="w-full">
+                <Download size={14} className="mr-2" /> Save Render
+             </Button>
+             <Button variant="secondary" className="w-full">
+                <Share2 size={14} className="mr-2" /> Share Clip
+             </Button>
+           </div>
         </div>
       );
     }
@@ -560,45 +604,78 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
 
     // 8. Landing Page Architect
     if (result.type === 'landing') {
+       const { subject, keywords } = inferSubject(globalTopic);
        return (
           <div className="space-y-6">
-             <div className="bg-slate-100 rounded-xl overflow-hidden border border-white/10 shadow-xl text-slate-900">
+             <div className="bg-white rounded-2xl overflow-hidden border border-white/10 shadow-2xl text-slate-900 font-sans">
                 {/* Mock Browser Header */}
-                <div className="bg-slate-200 px-4 py-2 flex items-center gap-2 border-b border-slate-300">
+                <div className="bg-slate-100 px-4 py-3 flex items-center gap-2 border-b border-slate-200">
                    <div className="w-3 h-3 rounded-full bg-red-400" />
                    <div className="w-3 h-3 rounded-full bg-amber-400" />
                    <div className="w-3 h-3 rounded-full bg-green-400" />
+                   <div className="ml-4 h-6 w-full max-w-sm bg-white rounded border border-slate-200 px-3 text-[10px] text-slate-400 flex items-center">
+                     https://hub.one-ai.com/{globalTopic.toLowerCase().replace(/\s+/g, '-')}
+                   </div>
                 </div>
                 {result.sections.map((section, i) => (
-                   <div key={i} className={`p-8 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}>
+                   <div key={i} className={`p-10 md:p-16 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}>
                       {section.type === 'hero' && (
-                         <div className="text-center space-y-4">
-                            <h1 className="text-3xl font-black text-slate-900">{section.title}</h1>
-                            <p className="text-slate-600 max-w-md mx-auto">{section.content}</p>
-                            <div className="bg-blue-600 text-white px-6 py-2 rounded-full inline-block text-sm font-bold">CTA Button</div>
+                         <div className="grid md:grid-cols-2 gap-12 items-center">
+                            <div className="space-y-6 text-left">
+                               <h1 className="text-4xl md:text-5xl font-black text-slate-900 leading-tight">{section.title}</h1>
+                               <p className="text-lg text-slate-600 leading-relaxed">{section.content}</p>
+                               <div className="flex gap-4">
+                                 <div className="bg-blue-600 text-white px-8 py-3 rounded-full text-sm font-bold shadow-lg hover:shadow-blue-500/20 transition-all cursor-pointer">Get Started</div>
+                                 <div className="border border-slate-200 text-slate-600 px-8 py-3 rounded-full text-sm font-bold hover:bg-slate-100 transition-all cursor-pointer">Learn More</div>
+                               </div>
+                            </div>
+                            <div className="relative aspect-square md:aspect-video rounded-3xl overflow-hidden shadow-2xl border border-white/20">
+                               <img 
+                                 src={generateImageURL(`High fidelity hero visual for ${subject}, ${keywords}`, 1000, 800, 123)} 
+                                 className="w-full h-full object-cover"
+                                 alt="Hero"
+                               />
+                            </div>
                          </div>
                       )}
                       {section.type === 'features' && (
-                         <div className="grid grid-cols-3 gap-4 text-center">
-                            {[1,2,3].map(j => (
-                               <div key={j} className="p-4 border rounded bg-slate-50">
-                                  <div className="w-8 h-8 bg-blue-100 rounded mb-2 mx-auto" />
-                                  <div className="h-3 bg-slate-200 w-2/3 mx-auto rounded" />
-                               </div>
-                            ))}
+                         <div className="space-y-12 text-center">
+                            <h2 className="text-3xl font-bold text-slate-900">{section.title}</h2>
+                            <div className="grid md:grid-cols-3 gap-8">
+                               {[1,2,3].map(j => (
+                                  <div key={j} className="p-8 border border-slate-100 rounded-3xl bg-white shadow-sm hover:shadow-md transition-shadow">
+                                     <div className="w-12 h-12 bg-blue-50 rounded-2xl mb-6 flex items-center justify-center mx-auto text-blue-600">
+                                        <Layout size={24} />
+                                     </div>
+                                     <h4 className="font-bold mb-2 text-slate-800">Feature {j}</h4>
+                                     <p className="text-sm text-slate-500 leading-relaxed">Advanced AI-driven logic ensuring maximum engagement for your brand.</p>
+                                  </div>
+                               ))}
+                            </div>
                          </div>
                       )}
                       {section.type === 'social' && (
-                         <div className="text-center opacity-50 font-mono text-xs">
-                            {section.content}
+                         <div className="text-center py-8">
+                            <p className="text-xs text-slate-400 uppercase tracking-widest mb-6">{section.title}</p>
+                            <div className="flex flex-wrap justify-center gap-10 opacity-30 grayscale contrast-125">
+                               <span className="text-xl font-bold italic">FORBES</span>
+                               <span className="text-xl font-bold italic">TECHCRUNCH</span>
+                               <span className="text-xl font-bold italic">WIRED</span>
+                               <span className="text-xl font-bold italic">REUTERS</span>
+                            </div>
                          </div>
                       )}
                    </div>
                 ))}
              </div>
-             <Button onClick={() => handleCopy(JSON.stringify(result.sections))} variant="secondary" className="w-full">
-                Copy Wireframe Code
-             </Button>
+             <div className="flex gap-4">
+                <Button onClick={handleExportPNG} className="flex-1">
+                  <Download size={16} className="mr-2" /> Save Wireframe image
+                </Button>
+                <Button onClick={() => handleCopy(JSON.stringify(result.sections))} variant="secondary" className="flex-1">
+                  <Copy size={16} className="mr-2" /> Copy UI Props
+                </Button>
+             </div>
           </div>
        );
     }
@@ -607,31 +684,43 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
     if (result.type === 'email') {
        return (
           <div className="space-y-6">
-             <div className="flex gap-2 overflow-x-auto pb-2">
+             <div className="flex gap-2 overflow-x-auto pb-4 custom-scrollbar">
                 {result.emails.map((email, i) => (
                    <button 
                      key={i} 
                      onClick={() => setEmailTab(i)}
-                     className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                        emailTab === i ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50' : 'bg-white/5 text-slate-400 border border-white/5 hover:bg-white/10'
+                     className={`px-6 py-3 rounded-2xl text-sm font-semibold transition-all whitespace-nowrap border ${
+                        emailTab === i 
+                        ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50 shadow-[0_0_20px_-5px_rgba(6,182,212,0.3)]' 
+                        : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10'
                      }`}
                    >
-                      {email.type}
+                      Step {i + 1}: {email.type}
                    </button>
                 ))}
              </div>
-             <div className="bg-slate-900 p-6 rounded-xl border border-white/10 min-h-[300px]">
-                <div className="border-b border-white/10 pb-4 mb-4 space-y-2">
-                   <div className="text-sm text-slate-500">Subject:</div>
-                   <div className="text-white font-medium">{result.emails[emailTab].subject}</div>
+             <div className="bg-slate-900 p-8 rounded-3xl border border-white/10 shadow-2xl">
+                <div className="flex items-center gap-4 border-b border-white/10 pb-6 mb-6">
+                   <div className="w-10 h-10 rounded-full bg-cyan-500/20 flex items-center justify-center text-cyan-400">
+                     <Mail size={20} />
+                   </div>
+                   <div className="space-y-1">
+                      <div className="text-[10px] text-slate-500 uppercase font-black tracking-widest">Subject Line</div>
+                      <div className="text-white font-bold text-lg">{result.emails[emailTab].subject}</div>
+                   </div>
                 </div>
-                <div className="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap font-sans">
+                <div className="text-slate-300 text-base leading-relaxed whitespace-pre-wrap font-sans min-h-[250px]">
                    {result.emails[emailTab].body}
                 </div>
              </div>
-             <Button onClick={() => handleCopy(result.emails[emailTab].body)} variant="secondary" className="w-full">
-                Copy Email Content
-             </Button>
+             <div className="flex gap-4">
+               <Button onClick={() => handleCopy(result.emails[emailTab].body)} variant="primary" className="flex-1">
+                  <Copy size={16} className="mr-2" /> {copied ? 'Copied Content!' : 'Copy Body Text'}
+               </Button>
+               <Button onClick={() => handleCopy(result.emails[emailTab].subject)} variant="secondary" className="flex-1">
+                  Copy Subject
+               </Button>
+             </div>
           </div>
        );
     }
@@ -668,16 +757,99 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
        );
     }
 
-    // 12 & 13. Quiz & Strategy (Generic List Render)
-    if ('questions' in result || 'sections' in result) {
-       return (
-          <div className="space-y-4">
-             <div className="bg-slate-900 p-6 rounded-xl border border-white/10 max-h-[500px] overflow-y-auto custom-scrollbar">
-                <pre className="whitespace-pre-wrap text-slate-300 font-sans text-sm leading-7">{JSON.stringify(result, null, 2)}</pre>
-             </div>
-             <Button onClick={() => handleCopy(JSON.stringify(result))} variant="secondary" className="w-full">{copied ? 'Copied!' : 'Copy Data'}</Button>
+    // 12 & 13. Quiz & Strategy (Professional Report / Cards)
+    if (result.type === 'quiz') {
+      return (
+        <div className="space-y-8 max-w-2xl mx-auto py-10">
+          <div className="text-center space-y-2 mb-10">
+            <h3 className="text-3xl font-black text-white italic uppercase tracking-tighter">Engagement Quiz</h3>
+            <p className="text-cyan-400 text-sm font-bold tracking-widest uppercase">Subject: {globalTopic}</p>
           </div>
-       );
+          <div className="space-y-6">
+            {result.questions?.map((q, i) => (
+               <motion.div 
+                 key={i}
+                 initial={{ opacity: 0, x: -20 }}
+                 animate={{ opacity: 1, x: 0 }}
+                 transition={{ delay: i * 0.1 }}
+                 className="p-8 rounded-3xl bg-white/5 border border-white/10 hover:border-cyan-500/30 transition-all group"
+               >
+                  <p className="text-slate-400 text-xs font-bold mb-4 uppercase tracking-widest">Question {i + 1}</p>
+                  <h4 className="text-xl font-bold text-white mb-6 leading-tight">{q.q}</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {q.options.map((opt, j) => (
+                      <div key={j} className={`p-4 rounded-xl border text-sm font-medium transition-all ${
+                        opt === q.answer 
+                        ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' 
+                        : 'bg-white/5 border-white/5 text-slate-400'
+                      }`}>
+                        {opt}
+                      </div>
+                    ))}
+                  </div>
+               </motion.div>
+            ))}
+          </div>
+          <Button onClick={() => handleCopy(JSON.stringify(result.questions))} variant="secondary" className="w-full">
+            <Download size={16} className="mr-2" /> Export to LMS / Forms
+          </Button>
+        </div>
+      );
+    }
+
+    if (result.type === 'strategy') {
+      return (
+        <div className="space-y-8 max-w-4xl mx-auto">
+          <div className="flex items-center justify-between border-b border-white/10 pb-8 mb-8">
+            <div>
+              <h3 className="text-4xl font-black text-white italic uppercase tracking-tighter">{result.title || "Strategic Dossier"}</h3>
+              <p className="text-slate-500 text-sm font-medium mt-1">Generated for: <span className="text-cyan-400">{globalTopic}</span></p>
+            </div>
+            <div className="p-4 bg-red-500/10 rounded-2xl border border-red-500/20 flex flex-col items-center">
+              <span className="text-[10px] text-red-500 font-black uppercase tracking-widest mb-1">Risk Level</span>
+              <span className="text-2xl font-black text-white italic">CRITICAL</span>
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-6">
+            {result.sections?.map((section, i) => (
+               <motion.div 
+                 key={i}
+                 initial={{ opacity: 0, y: 20 }}
+                 animate={{ opacity: 1, y: 0 }}
+                 transition={{ delay: i * 0.1 }}
+                 className="p-8 rounded-3xl bg-slate-900 border border-white/10 shadow-xl flex flex-col gap-6"
+               >
+                  <div className="flex items-center gap-4">
+                     <div className="w-2 h-2 rounded-full bg-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.8)]" />
+                     <h4 className="font-black text-white uppercase tracking-widest text-sm">{section.heading}</h4>
+                  </div>
+                  <ul className="space-y-4">
+                    {section.items.map((item, j) => (
+                      <li key={j} className="flex gap-4 items-start text-slate-300 leading-relaxed group">
+                        <div className="mt-2 w-1.5 h-1.5 rounded-full bg-white/10 shrink-0 group-hover:bg-cyan-500 transition-colors" />
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+               </motion.div>
+            ))}
+          </div>
+          
+          <div className="p-10 bg-gradient-to-br from-cyan-600/20 to-blue-600/20 rounded-3xl border border-cyan-500/20 text-center space-y-6">
+             <h4 className="text-xl font-bold text-white tracking-tight">Ready to implement this roadmap?</h4>
+             <p className="text-slate-400 max-w-md mx-auto leading-relaxed italic">"Execution is the only differentiator in a market flooded with mediocre ideas."</p>
+             <div className="flex gap-4 justify-center">
+               <Button onClick={() => handleCopy(JSON.stringify(result))} variant="primary">
+                 <Copy size={16} className="mr-2" /> Copy Full Dossier
+               </Button>
+               <Button onClick={handleExportPDF} variant="secondary">
+                 <FileText size={16} className="mr-2" /> Export to PDF
+               </Button>
+             </div>
+          </div>
+        </div>
+      );
     }
 
     // Fallback

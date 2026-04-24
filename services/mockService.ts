@@ -1,340 +1,274 @@
 import { getMockData, getMockBrief, inferSubject, generateImageURL, MOCK_AUDIO_BLOB, CHARACTER_A_IDS, CHARACTER_B_IDS } from '../constants';
 import { ToolOutput, ContextBrief } from '../types';
-import { GoogleGenAI, Type, Modality } from "@google/genai";
 
-// Initialize with safe API key access (environment variable)
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
-// System Instructions for Gemini
+// System Instructions for the AI
 const SYSTEM_INSTRUCTION = `You are One AI Hub, a futuristic AI engine. 
 Your goal is to generate high-quality, professional, and strictly structured JSON content. 
 You must adhere to the user's specific topic ("Deep Subject"). 
 Do not use markdown formatting in the response, only return the raw JSON object.`;
 
-// Helper to delay for fallback simulation or UI pacing
+/**
+ * Common helper for AI generation via backend proxy
+ */
+const callAI = async (prompt: string, systemInstruction: string = SYSTEM_INSTRUCTION): Promise<string | null> => {
+  try {
+    const response = await fetch('/api/ai/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt,
+        systemInstruction,
+        model: "openrouter/auto"
+      })
+    });
+
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    
+    const data = await response.json();
+    // OpenRouter / OpenAI format
+    return data.choices?.[0]?.message?.content || null;
+  } catch (error) {
+    console.error("AI Proxy Error:", error);
+    return null;
+  }
+};
+
+// Helper to delay for UI pacing
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
- * Generates a real image using Imagen 4.0
+ * Generates a real image using Pollinations (Flux) - reliable and no-auth for prototype
  */
-const generateRealImage = async (prompt: string, aspectRatio: string = '16:9'): Promise<string | null> => {
-  if (!process.env.API_KEY) return null;
-  try {
-    const response = await ai.models.generateImages({
-      model: 'imagen-4.0-generate-001',
-      prompt: prompt,
-      config: {
-        numberOfImages: 1,
-        aspectRatio: aspectRatio as any, // '16:9' | '9:16' | '1:1' | '3:4' | '4:3'
-        outputMimeType: 'image/jpeg'
-      }
-    });
-    const base64 = response.generatedImages?.[0]?.image?.imageBytes;
-    if (base64) {
-      return `data:image/jpeg;base64,${base64}`;
-    }
-    return null;
-  } catch (e) {
-    console.warn("Imagen generation failed:", e);
-    return null;
-  }
+const generateRealImage = async (prompt: string, width: number = 1200, height: number = 600): Promise<string | null> => {
+  const seed = Math.floor(Math.random() * 100000);
+  const encoded = encodeURIComponent(prompt);
+  return `https://image.pollinations.ai/prompt/${encoded}?seed=${seed}&width=${width}&height=${height}&nologo=true&model=flux`;
 };
 
 /**
- * Generates real audio using Gemini TTS
+ * Mock audio - OpenRouter doesn't support TTS natively in same call easily
  */
 const generateRealAudio = async (text: string): Promise<string | null> => {
-  if (!process.env.API_KEY) return null;
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-preview-tts',
-      contents: { parts: [{ text }] },
-      config: {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Kore' }
-          }
-        }
-      }
-    });
-    
-    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (base64Audio) {
-      return `data:audio/wav;base64,${base64Audio}`;
-    }
-    return null;
-  } catch (e) {
-    console.warn("TTS generation failed:", e);
-    return null;
-  }
+  return null; // Fallback to mock audio
 };
 
 export const fetchGeminiBrief = async (topic: string): Promise<ContextBrief> => {
-  try {
-    if (!process.env.API_KEY) throw new Error("No API Key");
+  const { subject } = inferSubject(topic);
+  const prompt = `Generate a briefing about "${subject}". Return JSON with:
+  {
+    "summary": "string",
+    "headlines": [{"title": "string", "source": "string", "time": "string"}],
+    "hashtags": ["string"]
+  }`;
 
-    const { subject } = inferSubject(topic);
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: `Generate a briefing about "${subject}". Return JSON with summary, headlines (3 items with title, source, time), and hashtags (4 items).`,
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            summary: { type: Type.STRING },
-            headlines: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  title: { type: Type.STRING },
-                  source: { type: Type.STRING },
-                  time: { type: Type.STRING },
-                }
-              }
-            },
-            hashtags: { type: Type.ARRAY, items: { type: Type.STRING } }
-          }
-        }
-      }
-    });
-
-    if (response.text) {
-      return JSON.parse(response.text) as ContextBrief;
+  const aiResult = await callAI(prompt);
+  if (aiResult) {
+    try {
+      return JSON.parse(aiResult.replace(/```json|```/g, '').trim()) as ContextBrief;
+    } catch (e) {
+      console.warn("Brief JSON parse failed", e);
     }
-    throw new Error("Empty response");
-  } catch (error) {
-    console.warn("Gemini Brief failed, using fallback", error);
-    return getMockBrief(topic);
   }
+  return getMockBrief(topic);
 };
 
 export const generateContent = async (toolId: string, prompt: string, options?: any): Promise<ToolOutput> => {
-  // Simulate minimal latency for UX consistency even if AI is fast
   const latency = toolId === 'short-video' ? 3000 : 1500;
   const start = Date.now();
+  const { subject, keywords } = inferSubject(prompt);
+  const seed = Math.floor(Math.random() * 10000);
+  
+  let resultData: any = null;
 
-  try {
-    if (!process.env.API_KEY) throw new Error("No API Key");
-
-    const { subject, keywords } = inferSubject(prompt);
-    const seed = Math.floor(Math.random() * 10000);
-    
-    let resultData: any = null;
-
-    // --- TOOL SPECIFIC AI LOGIC ---
-
-    if (toolId === 'blog-studio') {
-      // Parallel Execution: Text Content + Banner Image
-      const [textResponse, imageResponse] = await Promise.all([
-        ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: `Write a blog post about "${subject}". Return JSON with 3 headline ideas and a finalPost object containing a title, a subtitle (engaging lead-in), and an array of content blocks (heading, paragraph, quote, list, separator).`,
-          config: {
-            systemInstruction: SYSTEM_INSTRUCTION,
-            responseMimeType: 'application/json',
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                ideas: { type: Type.ARRAY, items: { type: Type.STRING } },
-                finalPost: {
-                  type: Type.OBJECT,
-                  properties: {
-                    title: { type: Type.STRING },
-                    subtitle: { type: Type.STRING },
-                    blocks: {
-                      type: Type.ARRAY,
-                      items: {
-                        type: Type.OBJECT,
-                        properties: {
-                          type: { type: Type.STRING, enum: ['heading', 'paragraph', 'quote', 'list', 'separator'] },
-                          content: { type: Type.STRING, nullable: true },
-                          level: { type: Type.INTEGER, nullable: true },
-                          items: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }),
-        generateRealImage(`A high quality, abstract, cinematic header image representing ${subject}, futuristic style, 8k resolution`, '16:9')
-      ]);
-
-      if (textResponse.text) {
-        resultData = JSON.parse(textResponse.text);
-        resultData.type = 'blog';
-        // Use Real Image if successful, else Fallback
-        resultData.finalPost.imageUrl = imageResponse || generateImageURL(keywords + ',abstract,technology', 1200, 600, seed);
+  if (toolId === 'blog-studio') {
+    const aiPrompt = `Act as an expert copywriter. Write a complex blog post about "${subject}". 
+    The tone should be professional and thought-provoking.
+    Return JSON with:
+    {
+      "ideas": ["string", "string", "string"],
+      "finalPost": {
+        "title": "string",
+        "subtitle": "string",
+        "blocks": [
+          {"type": "heading", "content": "string", "level": 2},
+          {"type": "paragraph", "content": "string"},
+          {"type": "quote", "content": "string"},
+          {"type": "list", "items": ["string", "string"]},
+          {"type": "separator"}
+        ]
       }
+    }`;
 
-    } else if (toolId === 'storyboard') {
-      const count = options?.frameCount || 4;
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: `Create a ${count}-frame storyboard about "${subject}". The story must have a beginning, middle, and end. The FINAL frame must contain a clever narrative twist or surprise. Return JSON with an array of scenes, each having a description.`,
-        config: {
-          systemInstruction: SYSTEM_INSTRUCTION,
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              scenes: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: { description: { type: Type.STRING } }
-                }
-              }
-            }
-          }
-        }
-      });
+    const [aiResult, imageUrl] = await Promise.all([
+      callAI(aiPrompt),
+      generateRealImage(`Cinematic professional header for ${subject}, professional photography, high-tech style`)
+    ]);
 
-      if (response.text) {
-        resultData = JSON.parse(response.text);
+    if (aiResult) {
+      try {
+        resultData = JSON.parse(aiResult.replace(/```json|```/g, '').trim());
+        resultData.type = 'blog';
+        resultData.finalPost.imageUrl = imageUrl || generateImageURL(`Cinematic professional header for ${subject}, ${keywords}`, 1200, 600, seed);
+      } catch (e) {}
+    }
+
+  } else if (toolId === 'storyboard') {
+    const count = options?.frameCount || 4;
+    const aiPrompt = `Create a ${count}-frame cinematic storyboard about "${subject}". 
+    The narrative must build tension or curiosity.
+    CRITICAL: The FINAL frame MUST contain a shocking, subversive, or deeply ironic twist that completely recontextualizes the previous frames. Think like a "Black Mirror" or "Twilight Zone" ending.
+    Return JSON with:
+    {
+      "scenes": [{"description": "string"}]
+    }`;
+
+    const aiResult = await callAI(aiPrompt);
+    if (aiResult) {
+      try {
+        resultData = JSON.parse(aiResult.replace(/```json|```/g, '').trim());
         resultData.type = 'storyboard';
-        // Note: Generating 4-6 real images takes too long for this prototype flow, so we use the mock URL generator for the sequence
         resultData.scenes = resultData.scenes.map((s: any, i: number) => ({
           description: s.description,
-          imageUrl: generateImageURL(`${keywords}, cinematic, storyboard scene ${i + 1}`, 800, 450, seed + i)
+          imageUrl: generateImageURL(`Cinematic storyboard scene ${i + 1} about ${subject}, ${keywords}, dramatic lighting`, 800, 450, seed + i)
         }));
-      }
+      } catch (e) {}
+    }
 
-    } else if (toolId === 'ad-creator') {
-      // Parallel Execution: Ad Copy + Vertical Image
-      const [textResponse, imageResponse] = await Promise.all([
-        ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: `Create a high-conversion ad copy for "${subject}". Return JSON with headline and cta.`,
-          config: {
-            systemInstruction: SYSTEM_INSTRUCTION,
-            responseMimeType: 'application/json',
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                headline: { type: Type.STRING },
-                cta: { type: Type.STRING }
-              }
-            }
-          }
-        }),
-        generateRealImage(`A vertical, minimalist, high-end advertisement background for ${subject}, with empty space at the bottom for text`, '9:16')
-      ]);
+  } else if (toolId === 'ad-creator') {
+    const aiPrompt = `Create high-conversion ad copy for "${subject}". 
+    Return JSON with:
+    {
+      "headline": "string",
+      "cta": "string"
+    }`;
 
-      if (textResponse.text) {
-        resultData = JSON.parse(textResponse.text);
+    const [aiResult, imageUrl] = await Promise.all([
+      callAI(aiPrompt),
+      generateRealImage(`Vertical minimalist high-end advertisement visual for ${subject}`, 1080, 1920)
+    ]);
+
+    if (aiResult) {
+      try {
+        resultData = JSON.parse(aiResult.replace(/```json|```/g, '').trim());
         resultData.type = 'ad';
-        resultData.imageUrl = imageResponse || generateImageURL(keywords + ',vertical,minimalist', 1080, 1920, seed);
-      }
+        resultData.imageUrl = imageUrl || generateImageURL(`High-end vertical advertisement visual for ${subject}, ${keywords}`, 1080, 1920, seed);
+      } catch (e) {}
+    }
 
-    } else if (toolId === 'podcast') {
-      // Sequential Execution: Script -> Audio
-      const textResponse = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: `Write a short podcast intro script about "${subject}". Return JSON with topicOptions array and a script string.`,
-        config: {
-          systemInstruction: SYSTEM_INSTRUCTION,
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              topicOptions: { type: Type.ARRAY, items: { type: Type.STRING } },
-              script: { type: Type.STRING }
-            }
-          }
-        }
-      });
+  } else if (toolId === 'podcast') {
+    const aiPrompt = `Write a short podcast intro script about "${subject}". 
+    Return JSON with:
+    {
+      "topicOptions": ["string", "string"],
+      "script": "string"
+    }`;
 
-      if (textResponse.text) {
-        resultData = JSON.parse(textResponse.text);
+    const aiResult = await callAI(aiPrompt);
+    if (aiResult) {
+      try {
+        resultData = JSON.parse(aiResult.replace(/```json|```/g, '').trim());
         resultData.type = 'audio';
-        // Generate Audio from the script
-        const audioUrl = await generateRealAudio(resultData.script);
-        resultData.audioUrl = audioUrl || MOCK_AUDIO_BLOB;
-      }
+        resultData.audioUrl = MOCK_AUDIO_BLOB; // OpenRouter doesn't do TTS
+      } catch (e) {}
+    }
 
-    } else if (toolId === 'devils-advocate') {
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: `Critique the concept of "${subject}". Provide 3 weak points and a recommendation. Return JSON.`,
-        config: {
-          systemInstruction: SYSTEM_INSTRUCTION,
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              title: { type: Type.STRING },
-              sections: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    heading: { type: Type.STRING },
-                    items: { type: Type.ARRAY, items: { type: Type.STRING } }
-                  }
-                }
-              }
-            }
-          }
-        }
-      });
-      if (response.text) {
-        resultData = JSON.parse(response.text);
+  } else if (toolId === 'devils-advocate') {
+    const aiPrompt = `Critique "${subject}" brutally but professionally. 
+    Return JSON with:
+    {
+      "title": "string",
+      "sections": [{"heading": "string", "items": ["string"]}]
+    }`;
+
+    const aiResult = await callAI(aiPrompt);
+    if (aiResult) {
+      try {
+        resultData = JSON.parse(aiResult.replace(/```json|```/g, '').trim());
         resultData.type = 'strategy';
-      }
+      } catch (e) {}
+    }
 
-    } else if (toolId === 'quiz-magnet') {
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: `Create a 3-question quiz about "${subject}". Return JSON.`,
-        config: {
-          systemInstruction: SYSTEM_INSTRUCTION,
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              questions: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    q: { type: Type.STRING },
-                    options: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    answer: { type: Type.STRING }
-                  }
-                }
-              }
-            }
-          }
-        }
-      });
-      if (response.text) {
-        resultData = JSON.parse(response.text);
+  } else if (toolId === 'quiz-magnet') {
+    const aiPrompt = `Create a 3-question quiz about "${subject}". 
+    Return JSON with:
+    {
+      "questions": [{"q": "string", "options": ["string"], "answer": "string"}]
+    }`;
+
+    const aiResult = await callAI(aiPrompt);
+    if (aiResult) {
+      try {
+        resultData = JSON.parse(aiResult.replace(/```json|```/g, '').trim());
         resultData.type = 'quiz';
-      }
+      } catch (e) {}
     }
-
-    // Ensure we wait at least the latency time for UX consistency (so transitions aren't too fast)
-    const elapsed = Date.now() - start;
-    if (elapsed < latency) await wait(latency - elapsed);
-
-    if (resultData) {
-      return resultData as ToolOutput;
+  } else if (toolId === 'landing-page') {
+    const aiPrompt = `Design a landing page wireframe for "${subject}".
+    Return JSON with:
+    {
+      "sections": [
+        {"type": "hero", "title": "string", "content": "string"},
+        {"type": "features", "title": "string", "content": "string"},
+        {"type": "social", "title": "string", "content": "string"}
+      ]
+    }`;
+    const aiResult = await callAI(aiPrompt);
+    if (aiResult) {
+      try {
+        resultData = JSON.parse(aiResult.replace(/```json|```/g, '').trim());
+        resultData.type = 'landing';
+      } catch (e) {}
     }
-
-    // If we reached here and resultData is null but no error threw, throw to trigger fallback
-    throw new Error("Tool not implemented in AI logic or empty result");
-
-  } catch (e) {
-    console.warn(`Gemini generation failed for ${toolId}, falling back to mock data.`, e);
-    const elapsed = Date.now() - start;
-    if (elapsed < latency) await wait(latency - elapsed);
-    return getMockData(toolId, prompt, options);
+  } else if (toolId === 'email-sequence') {
+    const aiPrompt = `Write a 3-email drip sequence for "${subject}".
+    Return JSON with:
+    {
+      "emails": [{"type": "string", "subject": "string", "body": "string"}]
+    }`;
+    const aiResult = await callAI(aiPrompt);
+    if (aiResult) {
+      try {
+        resultData = JSON.parse(aiResult.replace(/```json|```/g, '').trim());
+        resultData.type = 'email';
+      } catch (e) {}
+    }
+  } else if (toolId === 'carousel') {
+    const aiPrompt = `Create a 5-slide LinkedIn carousel about "${subject}".
+    Return JSON with:
+    {
+      "slides": [{"title": "string", "content": "string", "color": "bg-blue-600"}]
+    }`;
+    const aiResult = await callAI(aiPrompt);
+    if (aiResult) {
+      try {
+        resultData = JSON.parse(aiResult.replace(/```json|```/g, '').trim());
+        resultData.type = 'carousel';
+        resultData.slides = resultData.slides.map((s: any, i: number) => ({
+          ...s,
+          content: i === 2 ? generateImageURL(`Abstract graphic for ${subject} slide ${i+1}, ${keywords}`, 800, 1000, seed + i) : s.content
+        }));
+      } catch (e) {}
+    }
+  } else if (toolId === 'campaign-master') {
+    const aiPrompt = `Create a marketing campaign strategy for "${subject}".
+    Return JSON with:
+    {
+      "title": "string",
+      "sections": [{"heading": "string", "items": ["string"]}]
+    }`;
+    const aiResult = await callAI(aiPrompt);
+    if (aiResult) {
+      try {
+        resultData = JSON.parse(aiResult.replace(/```json|```/g, '').trim());
+        resultData.type = 'strategy';
+      } catch (e) {}
+    }
   }
+
+  const elapsed = Date.now() - start;
+  if (elapsed < latency) await wait(latency - elapsed);
+
+  if (resultData) return resultData as ToolOutput;
+  return getMockData(toolId, prompt, options);
 };
+

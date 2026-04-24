@@ -266,8 +266,8 @@ export const getMockData = (toolId: string, context: string, options?: any): Too
         finalPost: {
           title: sanitizeText(`Mastering ${subject}: A Comprehensive Strategy`),
           subtitle: sanitizeText(`How to navigate the evolving landscape of ${subject} and achieve peak performance in 2024.`),
-          // UNPLASH SAFETY VALVE: Use Image Generator with keywords
-          imageUrl: generateImageURL(keywords + ',abstract,technology', 1200, 600, seed),
+          // UNPLASH SAFETY VALVE: Use Image Generator with inferred subject and keywords
+          imageUrl: generateImageURL(`Cinematic professional header for ${subject}, ${keywords}`, 1200, 600, seed),
           blocks: generateProfessionalBlog(subject)
         }
       };
@@ -279,13 +279,13 @@ export const getMockData = (toolId: string, context: string, options?: any): Too
         
         // THE CLEVER TWIST (CRITICAL RULE)
         const desc = isLast 
-          ? `PLOT TWIST: The ${subject} was not what it seemed. It turns out the real solution was human connection all along. A surprising, ironic turn of events.` 
-          : `Scene ${i + 1}: A vivid demonstration of ${subject} transforming the environment. The visual style is cinematic and moody.`;
+          ? `THE SUBVERSIVE TWIST: The camera pulls back to reveal that ${subject} was merely a high-fidelity simulation designed to test our endurance, leaving the viewer questioning the reality of everything that came before.` 
+          : `Scene ${i + 1}: A cinematic exploration of ${subject} as it begins to subtly warp the laws of its environment.`;
         
         // Use safe keywords from inference
         return {
           description: sanitizeText(desc),
-          imageUrl: generateImageURL(`${keywords}, cinematic scene ${i + 1}`, 800, 450, seed + i)
+          imageUrl: generateImageURL(`Cinematic storyboard scene ${i + 1} about ${subject}, ${keywords}, high contrast dramatic`, 800, 450, seed + i)
         };
       });
       return { type: 'storyboard', scenes };
@@ -304,7 +304,7 @@ export const getMockData = (toolId: string, context: string, options?: any): Too
     case 'ad-creator':
       return {
         type: 'ad',
-        imageUrl: generateImageURL(keywords + ',vertical,minimalist', 1080, 1920, seed),
+        imageUrl: generateImageURL(`High-end vertical advertisement visual for ${subject}, ${keywords}`, 1080, 1920, seed),
         headline: sanitizeText(`Redefine Your ${subject}`),
         cta: "Shop Now"
       };
@@ -346,9 +346,9 @@ export const getMockData = (toolId: string, context: string, options?: any): Too
       return {
         type: 'meme',
         memes: [
-          { imageUrl: generateImageURL('surprised,face', 500, 500, seed + 10), topText: "My Boss:", bottomText: sanitizeText(`"Explain ${subject} to me"`) },
-          { imageUrl: generateImageURL('happy,success', 500, 500, seed + 11), topText: "Me when I finally", bottomText: sanitizeText(`Understand ${subject}`) },
-          { imageUrl: generateImageURL('waiting,skeleton', 500, 500, seed + 12), topText: "Still waiting for", bottomText: sanitizeText(`The perfect ${subject} tool`) }
+          { imageUrl: generateImageURL(`Meme template about ${subject}, ${keywords}`, 500, 500, seed + 10), topText: "My Boss:", bottomText: sanitizeText(`"Explain ${subject} to me"`) },
+          { imageUrl: generateImageURL(`Meme template about ${subject}, ${keywords}`, 500, 500, seed + 11), topText: "Me when I finally", bottomText: sanitizeText(`Understand ${subject}`) },
+          { imageUrl: generateImageURL(`Meme template about ${subject}, ${keywords}`, 500, 500, seed + 12), topText: "Still waiting for", bottomText: sanitizeText(`The perfect ${subject} tool`) }
         ]
       };
     case 'devils-advocate':
@@ -382,6 +382,7 @@ export const getMockData = (toolId: string, context: string, options?: any): Too
         slides: [
           { title: sanitizeText(subject.toUpperCase()), content: 'The Ultimate Deep Dive', color: 'bg-indigo-600' },
           { title: 'Fact #1', content: sanitizeText(`Did you know ${subject} is growing 20% YoY?`), color: 'bg-blue-600' },
+          { title: 'Visual Insights', content: generateImageURL(`Infographic slide about ${subject}, ${keywords}`, 800, 1000, seed), color: 'bg-teal-600' },
           { title: 'Fact #2', content: 'It changes everything.', color: 'bg-teal-600' },
           { title: 'Fact #3', content: 'The secret is consistency.', color: 'bg-emerald-600' },
           { title: 'Summary', content: 'Save this post!', color: 'bg-slate-800' }
