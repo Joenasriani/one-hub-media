@@ -89,6 +89,53 @@ async function startServer() {
     }
   });
 
+  app.post("/api/ai/tts", async (req, res) => {
+    const { text, voice = "Kore" } = req.body;
+    let geminiKey = process.env.GEMINI_API_KEY;
+
+    try {
+      if (geminiKey) {
+        try {
+          const { GoogleGenAI } = await import("@google/genai");
+          const ai = new GoogleGenAI({ apiKey: geminiKey });
+
+          const response = await ai.models.generateContent({
+            model: "gemini-3.1-flash-tts-preview",
+            contents: [{ parts: [{ text: text }] }],
+            config: {
+              responseModalities: ["AUDIO"],
+              speechConfig: {
+                  voiceConfig: {
+                    prebuiltVoiceConfig: { voiceName: voice },
+                  },
+              },
+            },
+          });
+
+          const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+          if (base64Audio) {
+            return res.json({ audio: `data:audio/wav;base64,${base64Audio}` });
+          }
+        } catch (geminiError: any) {
+          console.warn("Gemini TTS failed, falling back...", geminiError.message);
+        }
+      }
+
+      // Fallback to free google-tts-api
+      const googleTTS = await import('google-tts-api');
+      const base64Audio = await googleTTS.getAudioBase64(text.substring(0, 200), {
+        lang: 'en',
+        slow: false,
+        host: 'https://translate.google.com',
+      });
+      return res.json({ audio: `data:audio/mp3;base64,${base64Audio}` });
+
+    } catch (error: any) {
+      console.error("TTS generation error:", error);
+      res.status(500).json({ error: error.message || "Failed to generate TTS" });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

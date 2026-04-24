@@ -58,10 +58,25 @@ const generateRealImage = async (prompt: string, width: number = 1200, height: n
 };
 
 /**
- * Mock audio - OpenRouter doesn't support TTS natively in same call easily
+ * Generate real audio using our new TTS endpoint
  */
 const generateRealAudio = async (text: string): Promise<string | null> => {
-  return null; // Fallback to mock audio
+  try {
+    const response = await fetch('/api/ai/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, voice: 'Kore' })
+    });
+    if (!response.ok) {
+      console.warn('TTS HTTP error', response.status);
+      return null;
+    }
+    const data = await response.json();
+    return data.audio || null;
+  } catch (error) {
+    console.error("Audio generation error:", error);
+    return null;
+  }
 };
 
 export const fetchGeminiBrief = async (topic: string): Promise<ContextBrief> => {
@@ -184,8 +199,9 @@ export const generateContent = async (toolId: string, prompt: string, options?: 
         // Extract the first sentence of the script for the TTS
         const firstSentence = (resultData.script || "").split('.')[0] || "Welcome to the podcast.";
         
-        // Use a simple free TTS endpoint for prototype
-        resultData.audioUrl = MOCK_AUDIO_BLOB;
+        // Use our real TTS generation endpoint!
+        const realAudioUrl = await generateRealAudio(firstSentence);
+        resultData.audioUrl = realAudioUrl || MOCK_AUDIO_BLOB;
       } catch (e) {}
     }
 
