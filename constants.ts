@@ -1,7 +1,7 @@
 import { Tool, ToolOutput, ContextBrief, BlogBlock, ThemeAccent } from './types';
 
 // EXACT Constant required by prompt
-export const MOCK_AUDIO_BLOB = "data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU";
+export const MOCK_AUDIO_BLOB = "https://actions.google.com/sounds/v1/science_fiction/computer_beeps.ogg";
 
 export const TOOLS: Tool[] = [
   // Creation
@@ -291,6 +291,7 @@ export const getMockData = (toolId: string, context: string, options?: any): Too
       return { type: 'storyboard', scenes };
       
     case 'podcast':
+      const podcastScript = `[INTRO MUSIC FADES]\n\nHOST: "Hello everyone, and welcome back. Today, we are tackling a massive subject: ${subject}."\n\nGUEST: "Thanks for having me. You know, ${subject} is misunderstood by most people."\n\nHOST: "Exactly. Let's break down the biggest myth right now."`;
       return {
         type: 'audio',
         topicOptions: [
@@ -298,7 +299,7 @@ export const getMockData = (toolId: string, context: string, options?: any): Too
           sanitizeText(`${subject}: Hype or Reality?`),
           sanitizeText(`Interview with a ${subject} Pioneer`)
         ],
-        script: sanitizeText(`[INTRO MUSIC FADES]\n\nHOST: "Hello everyone, and welcome back. Today, we are tackling a massive subject: ${subject}."\n\nGUEST: "Thanks for having me. You know, ${subject} is misunderstood by most people."\n\nHOST: "Exactly. Let's break down the biggest myth right now."`),
+        script: sanitizeText(podcastScript),
         audioUrl: MOCK_AUDIO_BLOB
       };
     case 'ad-creator':
@@ -373,7 +374,7 @@ export const getMockData = (toolId: string, context: string, options?: any): Too
     case 'short-video':
       return {
         type: 'video',
-        videoUrl: 'https://media.istockphoto.com/id/1445426863/video/abstract-network-background.mp4?s=mp4-640x640-is&k=20&c=3_p_rY6r-rF6tY7r7rY6r-rF6tY7r7rY6r-rF6tY7r7=', 
+        videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4', 
         duration: '00:15'
       };
     case 'carousel':

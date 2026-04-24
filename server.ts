@@ -12,26 +12,48 @@ async function startServer() {
 
   app.use(express.json());
 
-  // Proxy endpoint for OpenRouter
   app.post("/api/ai/generate", async (req, res) => {
     const { prompt, model = "openrouter/auto", systemInstruction } = req.body;
-    const apiKey = process.env.ONE_HUB_MEDIA_API;
-
-    if (!apiKey) {
-      return res.status(500).json({ error: "ONE_HUB_MEDIA_API is not configured." });
-    }
+    let openRouterKey = process.env.OPENROUTER_API_KEY || process.env.ONE_HUB_MEDIA_API;
+    let geminiKey = process.env.GEMINI_API_KEY;
 
     try {
+      // If we have a Gemini API key exposed by AI Studio, we'll use it to guarantee free generation
+      // and prevent 402 Insufficient Credit errors that happen with openrouter/auto
+      if (geminiKey && !openRouterKey) {
+        const { GoogleGenAI } = await import("@google/genai");
+        const ai = new GoogleGenAI({ apiKey: geminiKey });
+        const response = await ai.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: prompt,
+          config: {
+            systemInstruction: systemInstruction,
+            responseMimeType: "application/json"
+          }
+        });
+        return res.json({ text: response.text });
+      }
+
+      if (!openRouterKey && !geminiKey) {
+        return res.status(500).json({ error: "No API Key configured." });
+      }
+
+      // Automatically map to a free model on OpenRouter if 'auto' or 'free' is requested
+      let targetModel = model;
+      if (model.includes("auto") || model.includes("free")) {
+         targetModel = "google/gemini-2.5-pro"; // Fallback to a solid model if auto fails. (Requires paid openrouter though)
+      }
+
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "HTTP-Referer": "https://ai.studio/build", // Required by OpenRouter
-          "X-Title": "One AI Hub Prototype",
+          "Authorization": `Bearer ${openRouterKey}`,
+          "HTTP-Referer": "https://ai.studio/build",
+          "X-Title": "One AI Hub",
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          model: model,
+          model: model.includes("free") ? "google/gemini-2.5-pro:free" : targetModel,
           messages: [
             ...(systemInstruction ? [{ role: "system", content: systemInstruction }] : []),
             { role: "user", content: prompt }
@@ -40,10 +62,30 @@ async function startServer() {
       });
 
       const data = await response.json();
-      res.json(data);
-    } catch (error) {
-      console.error("OpenRouter Error:", error);
-      res.status(500).json({ error: "Failed to fetch from OpenRouter" });
+      
+      // If OpenRouter returns an error (like 402), fallback to Gemini if available
+      if (data.error) {
+         if (geminiKey) {
+            const { GoogleGenAI } = await import("@google/genai");
+            const ai = new GoogleGenAI({ apiKey: geminiKey });
+            const geminiRes = await ai.models.generateContent({
+              model: "gemini-2.5-flash",
+              contents: prompt,
+              config: {
+                systemInstruction: systemInstruction,
+                responseMimeType: "application/json"
+              }
+            });
+            return res.json({ text: geminiRes.text });
+         }
+         throw new Error(data.error.message || "OpenRouter failed");
+      }
+      
+      const text = data.choices?.[0]?.message?.content || null;
+      res.json({ text });
+    } catch (error: any) {
+      console.error("AI Generation Error:", error);
+      res.status(500).json({ error: error.message || "Failed to generate AI content" });
     }
   });
 

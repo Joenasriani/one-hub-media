@@ -341,12 +341,12 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
         <div className="space-y-8 animate-in fade-in zoom-in-95 duration-500">
           <div ref={exportRef} className="bg-slate-900 rounded-[2.5rem] border border-white/10 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)] overflow-hidden relative">
             <div className="absolute top-0 right-0 p-40 bg-cyan-500/5 blur-3xl rounded-full" />
-            <div className="h-[400px] w-full overflow-hidden border-b border-white/5">
+            <div className="w-full max-h-[60vh] overflow-hidden border-b border-white/5 flex justify-center items-center bg-black/80">
               <img 
                 src={result.finalPost.imageUrl} 
                 alt="Cover" 
-                className="w-full h-full object-cover transition-transform duration-[30s] hover:scale-125" 
-                crossOrigin="anonymous"
+                className="w-full max-h-[60vh] object-contain transition-transform duration-[30s] hover:scale-110" 
+                
               />
             </div>
             <div className="max-w-3xl mx-auto p-12 md:p-20 relative">
@@ -400,12 +400,11 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
              <div ref={exportRef} className="flex overflow-x-auto gap-4 pb-4 custom-scrollbar snap-x p-2">
                {result.scenes.map((scene, i) => (
                   <div key={i} className="min-w-[300px] md:min-w-[400px] bg-slate-900 p-4 rounded-xl border border-white/10 snap-center flex-shrink-0">
-                     <div className="relative aspect-video w-full mb-4 overflow-hidden rounded-lg">
+                     <div className="relative aspect-video w-full max-h-[60vh] mb-4 overflow-hidden rounded-lg bg-black">
                        <img 
                          src={scene.imageUrl} 
-                         className="w-full h-full object-cover opacity-90 hover:scale-105 transition-transform duration-700" 
+                         className="w-full h-full object-contain opacity-90 hover:scale-105 transition-transform duration-700" 
                          alt={`Scene ${i+1}`} 
-                         crossOrigin="anonymous"
                        />
                        <span className="absolute top-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded backdrop-blur">Frame {i + 1}</span>
                      </div>
@@ -476,12 +475,12 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
       return (
         <div className="flex flex-col md:flex-row gap-8 items-start justify-center">
           <div className="flex-1 w-full flex flex-col items-center">
-             <div ref={exportRef} className="relative w-[320px] max-w-full aspect-[9/16] rounded-2xl overflow-hidden shadow-2xl group border border-white/10 bg-black">
+             <div ref={exportRef} className="relative w-auto h-[60vh] md:h-[70vh] max-w-full aspect-[9/16] mx-auto rounded-2xl overflow-hidden shadow-2xl group border border-white/10 bg-black">
                 <img 
                   src={result.imageUrl} 
-                  className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" 
+                  className="w-full h-full object-contain transition-transform duration-1000 group-hover:scale-105" 
                   alt="Ad Creative" 
-                  crossOrigin="anonymous" 
+                   
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-sky-500/5 to-transparent opacity-90" />
                 <div className="absolute bottom-0 left-0 right-0 p-8 text-center pb-12">
@@ -531,7 +530,9 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
               <h3 className="text-slate-400 mb-4 uppercase text-xs font-bold flex items-center gap-2"><ImageIcon size={14} /> Character A (Male)</h3>
               <div className="grid grid-cols-2 gap-4">
                 {result.characterA.map((img, i) => (
-                   <img key={i} src={img} className="rounded-xl w-full aspect-[3/4] object-cover border border-white/10 hover:border-cyan-500/50 transition-colors" alt="Host A" />
+                   <div key={i} className="rounded-xl w-full max-h-[50vh] overflow-hidden border border-white/10 bg-black hover:border-cyan-500/50 transition-colors">
+                     <img src={img} className="w-full h-full object-contain aspect-[3/4]" alt="Host A" />
+                   </div>
                 ))}
               </div>
             </div>
@@ -539,7 +540,9 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
               <h3 className="text-slate-400 mb-4 uppercase text-xs font-bold flex items-center gap-2"><ImageIcon size={14} /> Character B (Female)</h3>
               <div className="grid grid-cols-2 gap-4">
                 {result.characterB.map((img, i) => (
-                   <img key={i} src={img} className="rounded-xl w-full aspect-[3/4] object-cover border border-white/10 hover:border-cyan-500/50 transition-colors" alt="Host B" />
+                   <div key={i} className="rounded-xl w-full max-h-[50vh] overflow-hidden border border-white/10 bg-black hover:border-cyan-500/50 transition-colors">
+                     <img src={img} className="w-full h-full object-contain aspect-[3/4]" alt="Host B" />
+                   </div>
                 ))}
               </div>
             </div>
@@ -610,9 +613,9 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
                   <div key={i} className={`min-w-[280px] md:min-w-[400px] aspect-[4/5] ${slide.color || 'bg-slate-800'} p-0 rounded-xl shadow-lg flex flex-col justify-between snap-center shrink-0 border border-white/10 relative overflow-hidden group`}>
                      <div className="absolute top-0 right-0 p-10 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none" />
                      {slide.imageUrl ? (
-                       <img src={slide.imageUrl} alt={slide.title} className="absolute inset-0 w-full h-full object-cover opacity-40 mix-blend-overlay group-hover:scale-105 transition-transform duration-700 pointer-events-none" crossOrigin="anonymous" />
+                       <img src={slide.imageUrl} alt={slide.title} className="absolute inset-0 w-full h-full object-cover opacity-40 mix-blend-overlay group-hover:scale-105 transition-transform duration-700 pointer-events-none"  />
                      ) : (slide.content?.startsWith('http') && (
-                       <img src={slide.content} alt={slide.title} className="absolute inset-0 w-full h-full object-cover opacity-40 mix-blend-overlay group-hover:scale-105 transition-transform duration-700 pointer-events-none" crossOrigin="anonymous" />
+                       <img src={slide.content} alt={slide.title} className="absolute inset-0 w-full h-full object-cover opacity-40 mix-blend-overlay group-hover:scale-105 transition-transform duration-700 pointer-events-none"  />
                      ))}
                      <div className="p-8 flex flex-col justify-between h-full relative z-10">
                        <div>
@@ -669,12 +672,12 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
                                  <div className="border border-slate-200 text-slate-600 px-8 py-3 rounded-full text-sm font-bold hover:bg-slate-100 transition-all cursor-pointer">Learn More</div>
                                </div>
                             </div>
-                            <div className="relative aspect-square md:aspect-video rounded-3xl overflow-hidden shadow-2xl border border-white/20 bg-slate-100">
+                            <div className="relative aspect-square md:aspect-video max-h-[60vh] rounded-3xl overflow-hidden shadow-2xl border border-white/20 bg-slate-100 flex items-center justify-center">
                                <img 
                                  src={result.heroImageUrl || generateImageURL(`High fidelity hero visual for ${subject}, ${keywords}`, 1000, 800, 123)} 
-                                 className="w-full h-full object-cover"
+                                 className="w-full h-full object-contain"
                                  alt="Hero"
-                                 crossOrigin="anonymous"
+                                 
                                />
                             </div>
                          </div>
@@ -774,9 +777,9 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
                 {result.memes.map((meme, i) => (
                    <div key={i} className="relative group rounded-xl overflow-hidden border border-white/10">
                       {/* Visual to Capture */}
-                      <div id={`meme-visual-${i}`} className="relative aspect-square w-full h-full">
-                        <img src={meme.imageUrl} className="w-full h-full object-cover" alt="Meme" crossOrigin="anonymous" />
-                        <div className="absolute inset-0 flex flex-col justify-between p-4 text-center pointer-events-none">
+                      <div id={`meme-visual-${i}`} className="relative max-h-[60vh] aspect-square mx-auto w-full h-full bg-black">
+                        <img src={meme.imageUrl} className="w-full h-full object-contain mix-blend-screen" alt="Meme"  />
+                        <div className="absolute inset-x-0 h-full flex flex-col justify-between py-6 px-4 text-center pointer-events-none">
                           <span className="font-black text-white text-2xl uppercase drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] stroke-black stroke-2" style={{ textShadow: '2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000' }}>{meme.topText}</span>
                           <span className="font-black text-white text-2xl uppercase drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] stroke-black stroke-2" style={{ textShadow: '2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000' }}>{meme.bottomText}</span>
                         </div>

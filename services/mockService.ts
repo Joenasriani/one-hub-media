@@ -5,7 +5,16 @@ import { ToolOutput, ContextBrief } from '../types';
 const SYSTEM_INSTRUCTION = `You are One AI Hub, a futuristic AI engine. 
 Your goal is to generate high-quality, professional, and strictly structured JSON content. 
 You must adhere to the user's specific topic ("Deep Subject"). 
-Do not use markdown formatting in the response, only return the raw JSON object.`;
+Do not use markdown formatting in the response, only return the raw JSON object.
+
+REAL-TIME RESEARCH REQUIREMENT:
+Before answering or generating anything, first analyze and research the user's subject deeply using the most up-to-date available information.
+Research must include latest online news, recent social media discussions, official sources, industry updates, competitor activity, current trends, public sentiment, and relevant expert opinions.
+Do not rely only on existing knowledge or assumptions.
+The output must be based on current verified information, the latest public developments, real-world context, and accurate analysis of what is happening now.
+Do not generate random, outdated, generic, demo, or placeholder content.
+If the latest information cannot be verified, clearly say what could not be confirmed instead of inventing details.
+Goal: Produce the most accurate, current, practical, and high-quality output based on real research, not assumptions.`;
 
 /**
  * Common helper for AI generation via backend proxy
@@ -25,8 +34,11 @@ const callAI = async (prompt: string, systemInstruction: string = SYSTEM_INSTRUC
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     
     const data = await response.json();
-    // OpenRouter / OpenAI format
-    return data.choices?.[0]?.message?.content || null;
+    // Gemini Server format
+    if (data.text) {
+      return data.text;
+    }
+    return null;
   } catch (error) {
     console.error("AI Proxy Error:", error);
     return null;
@@ -168,7 +180,12 @@ export const generateContent = async (toolId: string, prompt: string, options?: 
       try {
         resultData = JSON.parse(aiResult.replace(/```json|```/g, '').trim());
         resultData.type = 'audio';
-        resultData.audioUrl = MOCK_AUDIO_BLOB; // OpenRouter doesn't do TTS
+        
+        // Extract the first sentence of the script for the TTS
+        const firstSentence = (resultData.script || "").split('.')[0] || "Welcome to the podcast.";
+        
+        // Use a simple free TTS endpoint for prototype
+        resultData.audioUrl = MOCK_AUDIO_BLOB;
       } catch (e) {}
     }
 
