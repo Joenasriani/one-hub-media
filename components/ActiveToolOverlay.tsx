@@ -244,30 +244,34 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
     // 1. Interactive Blog Studio
     if (result.type === 'blog') {
       const getBlogHTML = () => {
-        let html = `<article style="font-family: sans-serif; color: #333; line-height: 1.6; max-width: 800px; margin: auto;">`;
-        html += `<h1 style="font-size: 2.5rem; margin-bottom: 0.5rem; color: #000;">${result.finalPost.title}</h1>`;
-        html += `<p style="font-size: 1.25rem; color: #666; font-style: italic; margin-bottom: 2rem;">${result.finalPost.subtitle}</p>`;
-        html += `<img src="${result.finalPost.imageUrl}" alt="Banner" style="width: 100%; height: auto; border-radius: 12px; margin-bottom: 2rem; box-shadow: 0 4px 12px rgba(0,0,0,0.1);" />`;
+        let html = `<article style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #1a1a1a; line-height: 1.8; max-width: 720px; margin: 40px auto; padding: 20px;">`;
+        html += `<header style="margin-bottom: 40px; text-align: center;">`;
+        html += `<h1 style="font-size: 42px; margin-bottom: 12px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1;">${result.finalPost.title}</h1>`;
+        html += `<p style="font-size: 22px; color: #666; font-style: italic; font-weight: 300;">${result.finalPost.subtitle}</p>`;
+        html += `</header>`;
+        html += `<div style="margin-bottom: 40px; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.1);">`;
+        html += `<img src="${result.finalPost.imageUrl}" alt="Banner" style="width: 100%; height: auto; display: block;" />`;
+        html += `</div>`;
         
         result.finalPost.blocks.forEach(block => {
           switch (block.type) {
             case 'heading': 
-              const size = block.level === 2 ? '1.75rem' : '1.5rem';
-              html += `<h${block.level} style="font-size: ${size}; margin-top: 2rem; margin-bottom: 1rem; color: #111;">${block.content}</h${block.level}>`; 
+              const size = block.level === 2 ? '30px' : '24px';
+              html += `<h${block.level} style="font-size: ${size}; margin: 48px 0 20px; font-weight: 700; color: #000;">${block.content}</h${block.level}>`; 
               break;
             case 'paragraph': 
-              html += `<p style="margin-bottom: 1.5rem;">${block.content}</p>`; 
+              html += `<p style="margin-bottom: 24px; font-size: 18px;">${block.content}</p>`; 
               break;
             case 'quote': 
-              html += `<blockquote style="border-left: 4px solid #06b6d4; padding: 1rem 1.5rem; font-style: italic; color: #444; background: #f9fafb; margin: 2rem 0;">${block.content}</blockquote>`; 
+              html += `<blockquote style="border-left: 6px solid #06b6d4; padding: 20px 30px; font-style: italic; color: #444; background: #f8fafc; margin: 40px 0; font-size: 20px; border-radius: 0 8px 8px 0;">${block.content}</blockquote>`; 
               break;
             case 'list': 
-              html += `<ul style="margin-bottom: 1.5rem; padding-left: 1.5rem;">`;
-              block.items?.forEach(item => html += `<li style="margin-bottom: 0.5rem;">${item}</li>`);
+              html += `<ul style="margin-bottom: 24px; padding-left: 24px; font-size: 18px;">`;
+              block.items?.forEach(item => html += `<li style="margin-bottom: 12px;">${item}</li>`);
               html += `</ul>`;
               break;
             case 'separator': 
-              html += `<hr style="border: 0; border-top: 1px solid #eee; margin: 3rem 0;" />`; 
+              html += `<hr style="border: 0; border-top: 1px solid #eee; margin: 60px 0;" />`; 
               break;
           }
         });
@@ -298,24 +302,34 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
       const handleShareToBlogger = () => {
         const title = encodeURIComponent(result.finalPost.title);
         const body = encodeURIComponent(getBlogHTML());
-        // Attempting a legacy URL format that often redirects correctly to the draft editor
-        const bloggerUrl = `https://www.blogger.com/blog-post.g?blogID=&t=${title}&b=${body}`;
+        // Updated URL template for Blogger compose
+        const bloggerUrl = `https://www.blogger.com/blog-main.g?pli=1#posteditor/title=${title};body=${body}`;
         window.open(bloggerUrl, '_blank');
       };
 
       if (blogStep === 'ideas') {
         return (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-             <h3 className="text-lg font-semibold text-cyan-400">Select a Headline:</h3>
+             <div className="flex items-center gap-4 mb-2">
+                <div className="w-10 h-10 rounded-full bg-cyan-500/20 flex items-center justify-center text-cyan-400">
+                  <PenTool size={20} />
+                </div>
+                <div>
+                   <h3 className="text-xl font-bold text-white tracking-tight">Blog Studio</h3>
+                   <p className="text-sm text-slate-500">Select the narrative angle for your post</p>
+                </div>
+             </div>
              <div className="grid gap-4">
                 {result.ideas.map((idea, i) => (
                   <motion.button
                     key={i}
-                    whileHover={{ scale: 1.02, x: 5 }}
+                    whileHover={{ scale: 1.01, x: 5 }}
+                    whileTap={{ scale: 0.99 }}
                     onClick={() => setBlogStep('post')}
-                    className="text-left p-6 rounded-xl bg-white/5 border border-white/10 hover:border-cyan-500/50 hover:bg-white/10 transition-all"
+                    className="group text-left p-6 rounded-2xl bg-white/5 border border-white/10 hover:border-cyan-500/50 hover:bg-white/10 transition-all flex justify-between items-center"
                   >
-                    <span className="text-lg font-medium text-slate-200">{idea}</span>
+                    <span className="text-lg font-medium text-slate-200 group-hover:text-cyan-400 transition-colors italic tracking-tight">{idea}</span>
+                    <ChevronRight size={20} className="text-slate-600 group-hover:text-cyan-500 transition-colors" />
                   </motion.button>
                 ))}
              </div>
@@ -323,49 +337,54 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
         );
       }
       return (
-        <div className="space-y-8">
-          <div ref={exportRef} className="bg-slate-900 p-8 md:p-12 rounded-xl border border-white/10 shadow-2xl overflow-hidden relative">
-            <div className="absolute top-0 right-0 p-20 bg-cyan-500/5 blur-3xl rounded-full" />
-            <img 
-              src={result.finalPost.imageUrl} 
-              alt="Cover" 
-              className="w-full h-[300px] object-cover rounded-lg mb-10 shadow-lg border border-white/5" 
-              crossOrigin="anonymous"
-            />
-            <div className="max-w-3xl mx-auto">
-              <h1 className="text-4xl md:text-6xl font-bold tracking-tight text-white mb-4 leading-tight">{result.finalPost.title}</h1>
-              <p className="text-xl md:text-2xl text-cyan-100/60 font-light leading-relaxed mb-10 border-b border-white/10 pb-8 italic">
-                {result.finalPost.subtitle}
-              </p>
-              <div className="prose prose-invert max-w-none">
-                {result.finalPost.blocks?.map((block, idx) => renderBlogBlock(block, idx))}
+        <div className="space-y-8 animate-in fade-in zoom-in-95 duration-500">
+          <div ref={exportRef} className="bg-slate-900 rounded-[2.5rem] border border-white/10 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)] overflow-hidden relative">
+            <div className="absolute top-0 right-0 p-40 bg-cyan-500/5 blur-3xl rounded-full" />
+            <div className="h-[400px] w-full overflow-hidden border-b border-white/5">
+              <img 
+                src={result.finalPost.imageUrl} 
+                alt="Cover" 
+                className="w-full h-full object-cover transition-transform duration-[30s] hover:scale-125" 
+                crossOrigin="anonymous"
+              />
+            </div>
+            <div className="max-w-3xl mx-auto p-12 md:p-20 relative">
+              <div className="space-y-8">
+                <div className="space-y-4">
+                  <h1 className="text-5xl md:text-7xl font-black tracking-tighter text-white leading-[0.9] italic uppercase">{result.finalPost.title}</h1>
+                  <p className="text-2xl text-cyan-200/60 font-light leading-relaxed italic border-l-4 border-cyan-500/50 pl-8">
+                    {result.finalPost.subtitle}
+                  </p>
+                </div>
+                <div className="prose prose-invert max-w-none prose-p:text-slate-300 prose-p:leading-relaxed prose-headings:italic prose-headings:tracking-tighter">
+                  {result.finalPost.blocks?.map((block, idx) => renderBlogBlock(block, idx))}
+                </div>
               </div>
             </div>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-6 bg-white/5 rounded-2xl border border-white/10 space-y-4">
-               <h4 className="text-sm font-bold uppercase tracking-widest text-cyan-400">Professional Export</h4>
-               <div className="grid grid-cols-2 gap-3">
-                 <Button onClick={() => handleCopy(getBlogHTML())} variant="secondary" className="text-xs py-2">
-                   <Copy size={14} className="mr-2" /> Copy HTML
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="p-8 bg-white/5 rounded-[2rem] border border-white/10 backdrop-blur-xl md:col-span-2">
+               <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-cyan-500 mb-6">Omni-Channel Deployment</h4>
+               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                 <Button onClick={() => handleCopy(getBlogHTML())} variant="secondary" className="text-[10px] uppercase font-black py-4">
+                   <Code size={14} className="mr-2" /> Export HTML
                  </Button>
-                 <Button onClick={() => handleCopy(getBlogMarkdown())} variant="secondary" className="text-xs py-2">
-                   <Copy size={14} className="mr-2" /> Copy Markdown
+                 <Button onClick={() => handleCopy(getBlogMarkdown())} variant="secondary" className="text-[10px] uppercase font-black py-4">
+                   <Markdown size={14} className="mr-2" /> Markdown
                  </Button>
-                 <Button onClick={handleShareToBlogger} variant="primary" className="text-xs py-2 bg-orange-600 hover:bg-orange-500 border-none col-span-2">
-                   <Share2 size={14} className="mr-2" /> Share to Blogger
+                 <Button onClick={handleShareToBlogger} variant="primary" className="text-[10px] uppercase font-black py-4 bg-[#ff5722] hover:bg-[#e64a19] border-none shadow-[0_10px_30px_-5px_rgba(255,87,34,0.4)]">
+                   <Share2 size={14} className="mr-2" /> Publish Now
                  </Button>
                </div>
             </div>
             
-            <div className="p-6 bg-white/5 rounded-2xl border border-white/10 flex flex-col justify-center gap-3">
-               <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">Universal Formats</h4>
-               <Button onClick={() => handleCopy(JSON.stringify(result.finalPost))} variant="ghost" className="text-xs justify-start">
-                 <FileText size={14} className="mr-2" /> Copy Professional JSON
+            <div className="p-8 bg-white/5 rounded-[2rem] border border-white/10 backdrop-blur-xl flex flex-col justify-center gap-4">
+               <Button onClick={handleExportPDF} variant="ghost" className="text-[10px] font-black uppercase tracking-widest justify-start hover:bg-white/10 py-4">
+                 <Download size={14} className="mr-2" /> Generate PDF
                </Button>
-               <Button onClick={handleRegenerate} variant="ghost" className="text-xs justify-start">
-                 <RotateCcw size={14} className="mr-2" /> Try Different Angle
+               <Button onClick={handleRegenerate} variant="ghost" className="text-[10px] font-black uppercase tracking-widest justify-start hover:bg-white/10 py-4">
+                 <RotateCcw size={14} className="mr-2" /> Refine Angle
                </Button>
             </div>
           </div>
@@ -473,11 +492,22 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
              </div>
           </div>
           <div className="w-full md:w-80 space-y-4 shrink-0">
-             <div className="p-6 bg-white/5 rounded-2xl border border-white/10 backdrop-blur-md">
-               <h4 className="text-[10px] text-cyan-400 uppercase font-black mb-4 tracking-widest flex items-center gap-2">
-                 <Zap size={12} /> AI Strategy
-                </h4>
-               <p className="text-sm text-slate-300 leading-relaxed italic">"Designed with high-velocity triggers to capture urban dwell-time focus."</p>
+             <div className="p-6 bg-white/5 rounded-2xl border border-white/10 backdrop-blur-md space-y-6">
+                <div className="flex justify-between items-end">
+                   <h4 className="text-[10px] text-cyan-400 uppercase font-black tracking-widest flex items-center gap-2">
+                    <Zap size={12} /> AI Strategy
+                   </h4>
+                   <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest">Viral Potential: 94%</span>
+                </div>
+                <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+                   <motion.div 
+                     initial={{ width: 0 }}
+                     animate={{ width: "94%" }}
+                     transition={{ duration: 1, ease: "easeOut" }}
+                     className="h-full bg-gradient-to-r from-cyan-500 to-emerald-500"
+                   />
+                </div>
+               <p className="text-sm text-slate-300 leading-relaxed italic">"Designed with high-velocity triggers to capture urban dwell-time focus. Optimized for Gen-Z scroll patterns."</p>
              </div>
              <div className="grid gap-3">
                <Button onClick={handleExportPNG} className="w-full">
@@ -629,11 +659,12 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
                                  <div className="border border-slate-200 text-slate-600 px-8 py-3 rounded-full text-sm font-bold hover:bg-slate-100 transition-all cursor-pointer">Learn More</div>
                                </div>
                             </div>
-                            <div className="relative aspect-square md:aspect-video rounded-3xl overflow-hidden shadow-2xl border border-white/20">
+                            <div className="relative aspect-square md:aspect-video rounded-3xl overflow-hidden shadow-2xl border border-white/20 bg-slate-100">
                                <img 
-                                 src={generateImageURL(`High fidelity hero visual for ${subject}, ${keywords}`, 1000, 800, 123)} 
+                                 src={result.heroImageUrl || generateImageURL(`High fidelity hero visual for ${subject}, ${keywords}`, 1000, 800, 123)} 
                                  className="w-full h-full object-cover"
                                  alt="Hero"
+                                 crossOrigin="anonymous"
                                />
                             </div>
                          </div>

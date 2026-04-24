@@ -217,6 +217,8 @@ export const generateContent = async (toolId: string, prompt: string, options?: 
       try {
         resultData = JSON.parse(aiResult.replace(/```json|```/g, '').trim());
         resultData.type = 'landing';
+        // Add a primary high-res hero image in the result
+        resultData.heroImageUrl = generateImageURL(`Cinematic 8k high fidelity hero visual for ${subject}, professional photography, realistic, atmospheric`, 1200, 800, seed);
       } catch (e) {}
     }
   } else if (toolId === 'email-sequence') {
@@ -245,7 +247,7 @@ export const generateContent = async (toolId: string, prompt: string, options?: 
         resultData.type = 'carousel';
         resultData.slides = resultData.slides.map((s: any, i: number) => ({
           ...s,
-          content: i === 2 ? generateImageURL(`Abstract graphic for ${subject} slide ${i+1}, ${keywords}`, 800, 1000, seed + i) : s.content
+          imageUrl: generateImageURL(`Expert presentation slide about ${subject}, professional clean design, ${keywords}`, 1080, 1350, seed + i)
         }));
       } catch (e) {}
     }

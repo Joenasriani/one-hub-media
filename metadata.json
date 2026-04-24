@@ -1,6 +1,9 @@
 {
-  "name": "+++++One AI Hub",
-  "description": "A High-Fidelity UI Prototype of a futuristic AI dashboard featuring simulated generative tools.",
-  "requestFramePermissions": [],
+  "name": "One AI Hub",
+  "description": "The elite workspace for real-time AI generation, marketing strategy, and creative deployment.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
   "majorCapabilities": []
 }
