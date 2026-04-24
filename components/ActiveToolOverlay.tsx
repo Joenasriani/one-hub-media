@@ -607,16 +607,25 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
          <div className="space-y-6">
              <div ref={exportRef} className="flex overflow-x-auto gap-4 pb-6 custom-scrollbar snap-x p-2">
                {result.slides.map((slide, i) => (
-                  <div key={i} className={`min-w-[280px] md:min-w-[400px] aspect-[4/5] ${slide.color} p-8 rounded-xl shadow-lg flex flex-col justify-between snap-center shrink-0 border border-white/10 relative overflow-hidden`}>
-                     <div className="absolute top-0 right-0 p-10 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10" />
-                     <div>
-                       <span className="text-xs font-bold opacity-50 uppercase tracking-widest mb-2 block">Slide {i + 1}</span>
-                       <h3 className="text-2xl font-bold text-white leading-tight">{slide.title}</h3>
-                     </div>
-                     <p className="text-white/90 text-lg font-medium">{slide.content}</p>
-                     <div className="flex justify-between items-center">
-                        <div className="w-8 h-1 bg-white/30 rounded-full" />
-                        <ChevronRight className="text-white/50" size={20} />
+                  <div key={i} className={`min-w-[280px] md:min-w-[400px] aspect-[4/5] ${slide.color || 'bg-slate-800'} p-0 rounded-xl shadow-lg flex flex-col justify-between snap-center shrink-0 border border-white/10 relative overflow-hidden group`}>
+                     <div className="absolute top-0 right-0 p-10 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none" />
+                     {slide.imageUrl ? (
+                       <img src={slide.imageUrl} alt={slide.title} className="absolute inset-0 w-full h-full object-cover opacity-40 mix-blend-overlay group-hover:scale-105 transition-transform duration-700 pointer-events-none" crossOrigin="anonymous" />
+                     ) : (slide.content?.startsWith('http') && (
+                       <img src={slide.content} alt={slide.title} className="absolute inset-0 w-full h-full object-cover opacity-40 mix-blend-overlay group-hover:scale-105 transition-transform duration-700 pointer-events-none" crossOrigin="anonymous" />
+                     ))}
+                     <div className="p-8 flex flex-col justify-between h-full relative z-10">
+                       <div>
+                         <span className="text-xs font-bold opacity-50 uppercase tracking-widest mb-2 block">Slide {i + 1}</span>
+                         <h3 className="text-2xl font-bold text-white leading-tight">{slide.title}</h3>
+                       </div>
+                       {!slide.content?.startsWith('http') && (
+                         <p className="text-white/90 text-lg font-medium">{slide.content}</p>
+                       )}
+                       <div className="flex justify-between items-center mt-6">
+                          <div className="w-8 h-1 bg-white/30 rounded-full" />
+                          <ChevronRight className="text-white/50" size={20} />
+                       </div>
                      </div>
                   </div>
                ))}
