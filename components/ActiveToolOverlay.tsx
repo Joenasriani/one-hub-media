@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Download, Copy, Play, Pause, Share2, ChevronRight, Sliders, RotateCcw, Image as ImageIcon, Video, Layout, Mail, Smile, FileText } from 'lucide-react';
+import { X, Download, Copy, Play, Pause, Share2, ChevronRight, Sliders, RotateCcw, Image as ImageIcon, Video, Layout, Mail, Smile, FileText, Zap, PenTool, Code } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { Tool, ToolOutput, BlogBlock } from '../types';
 import { generateContent } from '../services/mockService';
 import { Button } from './ui/Button';
 import { useApp } from '../context/AppContext';
+import { inferSubject } from '../constants';
 
 interface ActiveToolOverlayProps {
   tool: Tool;
@@ -371,7 +372,7 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
                    <Code size={14} className="mr-2" /> Export HTML
                  </Button>
                  <Button onClick={() => handleCopy(getBlogMarkdown())} variant="secondary" className="text-[10px] uppercase font-black py-4">
-                   <Markdown size={14} className="mr-2" /> Markdown
+                   <FileText size={14} className="mr-2" /> Markdown
                  </Button>
                  <Button onClick={handleShareToBlogger} variant="primary" className="text-[10px] uppercase font-black py-4 bg-[#ff5722] hover:bg-[#e64a19] border-none shadow-[0_10px_30px_-5px_rgba(255,87,34,0.4)]">
                    <Share2 size={14} className="mr-2" /> Publish Now
