@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Download, Copy, Play, Pause, Share2, ChevronRight, Sliders, RotateCcw, Image as ImageIcon, Video, Layout, Mail, Smile, FileText, Zap, PenTool, Code } from 'lucide-react';
 import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
 import { Tool, ToolOutput, BlogBlock } from '../types';
 import { generateContent } from '../services/mockService';
 import { Button } from './ui/Button';
@@ -19,6 +18,7 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
   
   const [result, setResult] = useState<ToolOutput | null>(null);
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
   // Storyboard State
   const [storyboardFrames, setStoryboardFrames] = useState(4);
@@ -36,6 +36,7 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
   const handleGenerate = async () => {
     setLoading(true);
     setIsGenerating(true);
+    setErrorMessage(null);
     setResult(null);
     
     // Reset Flow States
@@ -49,6 +50,8 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
       const data = await generateContent(tool.id, globalTopic, options);
       setResult(data);
       if (tool.id === 'storyboard') setStoryboardGenerated(true);
+    } catch (error: any) {
+      setErrorMessage(error?.message || 'Generation failed. Please verify provider configuration and try again.');
     } finally {
       setLoading(false);
       setIsGenerating(false);
@@ -78,24 +81,35 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
   };
 
   const handleExportPDF = async () => {
-    if (exportRef.current) {
-      try {
-        const canvas = await html2canvas(exportRef.current, { 
-          useCORS: true, 
-          scale: 2,
-          logging: false
-        });
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF({
-          orientation: 'landscape',
-          unit: 'px',
-          format: [canvas.width, canvas.height]
-        });
-        pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
-        pdf.save(`storyboard-${Date.now()}.pdf`);
-      } catch (e) {
-        console.error("PDF Export failed", e);
+    if (!exportRef.current) return;
+    try {
+      const content = exportRef.current.innerText?.trim();
+      if (!content) {
+        setErrorMessage('Cannot export empty content to PDF.');
+        return;
       }
+
+      const response = await fetch('/api/media/pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: `${tool.name} Export`,
+          content
+        })
+      });
+      const payload = await response.json().catch(() => null);
+
+      if (!response.ok || !payload?.data?.dataUrl) {
+        setErrorMessage(payload?.error?.message || 'PDF export failed.');
+        return;
+      }
+
+      const link = document.createElement('a');
+      link.href = payload.data.dataUrl;
+      link.download = payload.data.fileName || `one-hub-export-${Date.now()}.pdf`;
+      link.click();
+    } catch (e: any) {
+      setErrorMessage(e?.message || 'PDF export failed.');
     }
   };
 
@@ -937,6 +951,16 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
           </div>
 
           <AnimatePresence mode="wait">
+            {errorMessage && (
+              <motion.div
+                key="error-message"
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-4 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200"
+              >
+                {errorMessage}
+              </motion.div>
+            )}
             {loading ? (
               <LoadingSkeleton key="loader" />
             ) : (

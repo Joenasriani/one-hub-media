@@ -1,309 +1,224 @@
-import { getMockData, getMockBrief, inferSubject, generateImageURL, MOCK_AUDIO_BLOB, CHARACTER_A_IDS, CHARACTER_B_IDS } from '../constants';
+import { inferSubject, CHARACTER_A_IDS, CHARACTER_B_IDS } from '../constants';
 import { ToolOutput, ContextBrief } from '../types';
 
-// System Instructions for the AI
-const SYSTEM_INSTRUCTION = `You are One AI Hub, a futuristic AI engine. 
-Your goal is to generate high-quality, professional, and strictly structured JSON content. 
-You must adhere to the user's specific topic ("Deep Subject"). 
-Do not use markdown formatting in the response, only return the raw JSON object.
+interface ApiError extends Error {
+  code?: string;
+  status?: number;
+  details?: string;
+}
 
-REAL-TIME RESEARCH REQUIREMENT:
-Before answering or generating anything, first analyze and research the user's subject deeply using the most up-to-date available information.
-Research must include latest online news, recent social media discussions, official sources, industry updates, competitor activity, current trends, public sentiment, and relevant expert opinions.
-Do not rely only on existing knowledge or assumptions.
-The output must be based on current verified information, the latest public developments, real-world context, and accurate analysis of what is happening now.
-Do not generate random, outdated, generic, demo, or placeholder content.
-If the latest information cannot be verified, clearly say what could not be confirmed instead of inventing details.
-Goal: Produce the most accurate, current, practical, and high-quality output based on real research, not assumptions.`;
+const SYSTEM_INSTRUCTION = `You are One AI Hub, a production content engine.
+Return raw JSON only, no markdown or code fences.
+Do not hallucinate URLs or files.
+If facts are uncertain, clearly state uncertainty inside JSON fields.`;
 
-/**
- * Common helper for AI generation via backend proxy
- */
-const callAI = async (prompt: string, systemInstruction: string = SYSTEM_INSTRUCTION): Promise<string | null> => {
-  try {
-    const response = await fetch('/api/ai/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        prompt,
-        systemInstruction,
-        model: "openrouter/auto"
-      })
-    });
-
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    
-    const data = await response.json();
-    // Gemini Server format
-    if (data.text) {
-      return data.text;
-    }
-    return null;
-  } catch (error) {
-    console.error("AI Proxy Error:", error);
-    return null;
+const assertNotPlaceholder = (value: string, fieldName: string) => {
+  const normalized = value.toLowerCase();
+  const blocked = ["placeholder", "lorem ipsum", "example.com", "fake", "mock"];
+  if (blocked.some((token) => normalized.includes(token))) {
+    const error = new Error(`${fieldName} contains placeholder content.`) as ApiError;
+    error.code = 'invalid_provider_response';
+    throw error;
   }
 };
 
-// Helper to delay for UI pacing
-const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const apiPost = async <T>(url: string, body: Record<string, unknown>): Promise<T> => {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
 
-/**
- * Generates a real image using Pollinations (Flux) - reliable and no-auth for prototype
- */
-const generateRealImage = async (prompt: string, width: number = 1200, height: number = 600): Promise<string | null> => {
-  const seed = Math.floor(Math.random() * 100000);
-  const encoded = encodeURIComponent(prompt);
-  return `https://image.pollinations.ai/prompt/${encoded}?seed=${seed}&width=${width}&height=${height}&nologo=true&model=flux`;
+  const payload = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const error = new Error(payload?.error?.message || `Request failed: ${response.status}`) as ApiError;
+    error.code = payload?.error?.code;
+    error.status = response.status;
+    error.details = payload?.error?.details;
+    throw error;
+  }
+
+  return payload as T;
 };
 
-/**
- * Generate real audio using our new TTS endpoint
- */
-const generateRealAudio = async (text: string): Promise<string | null> => {
-  try {
-    const response = await fetch('/api/ai/tts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, voice: 'Kore' })
-    });
-    if (!response.ok) {
-      console.warn('TTS HTTP error', response.status);
-      return null;
-    }
-    const data = await response.json();
-    return data.audio || null;
-  } catch (error) {
-    console.error("Audio generation error:", error);
-    return null;
+const extractJson = (text: string): any => {
+  const cleaned = text.replace(/```json|```/g, '').trim();
+  return JSON.parse(cleaned);
+};
+
+const callTextModel = async (prompt: string, systemInstruction: string = SYSTEM_INSTRUCTION): Promise<string> => {
+  const response = await apiPost<{ data: { text: string } }>('/api/ai/text', {
+    prompt,
+    systemInstruction,
+    model: 'openrouter/auto'
+  });
+
+  const text = response?.data?.text?.trim();
+  if (!text) {
+    const error = new Error('Provider returned empty text.') as ApiError;
+    error.code = 'empty_generation_result';
+    throw error;
   }
+
+  assertNotPlaceholder(text, 'Generated text');
+  return text;
+};
+
+const generateImage = async (prompt: string, width: number, height: number): Promise<string> => {
+  const response = await apiPost<{ data: { imageUrl: string } }>('/api/media/image', { prompt, width, height });
+  const url = response?.data?.imageUrl;
+  if (!url) {
+    const error = new Error('Image provider returned no image URL.') as ApiError;
+    error.code = 'empty_generation_result';
+    throw error;
+  }
+  assertNotPlaceholder(url, 'Image URL');
+  return url;
+};
+
+const generateAudio = async (text: string): Promise<string> => {
+  const response = await apiPost<{ data: { audioUrl: string } }>('/api/media/tts', { text, voice: 'Kore' });
+  const url = response?.data?.audioUrl;
+  if (!url) {
+    const error = new Error('TTS provider returned no audio URL.') as ApiError;
+    error.code = 'empty_generation_result';
+    throw error;
+  }
+  return url;
 };
 
 export const fetchGeminiBrief = async (topic: string): Promise<ContextBrief> => {
-  const { subject } = inferSubject(topic);
-  const prompt = `Generate a briefing about "${subject}". Return JSON with:
-  {
-    "summary": "string",
-    "headlines": [{"title": "string", "source": "string", "time": "string"}],
-    "hashtags": ["string"]
-  }`;
-
-  const aiResult = await callAI(prompt);
-  if (aiResult) {
-    try {
-      return JSON.parse(aiResult.replace(/```json|```/g, '').trim()) as ContextBrief;
-    } catch (e) {
-      console.warn("Brief JSON parse failed", e);
-    }
+  const response = await apiPost<{ data: { text: string } }>('/api/ai/research', { topic });
+  const parsed = extractJson(response.data.text) as ContextBrief;
+  if (!parsed.summary || !parsed.headlines || !parsed.hashtags) {
+    throw new Error('Research response structure is invalid.');
   }
-  return getMockBrief(topic);
+  return parsed;
 };
 
 export const generateContent = async (toolId: string, prompt: string, options?: any): Promise<ToolOutput> => {
-  const latency = toolId === 'short-video' ? 3000 : 1500;
-  const start = Date.now();
   const { subject, keywords } = inferSubject(prompt);
-  const seed = Math.floor(Math.random() * 10000);
-  
-  let resultData: any = null;
 
   if (toolId === 'blog-studio') {
-    const aiPrompt = `Act as an expert copywriter. Write a complex blog post about "${subject}". 
-    The tone should be professional and thought-provoking.
-    Return JSON with:
-    {
-      "ideas": ["string", "string", "string"],
-      "finalPost": {
-        "title": "string",
-        "subtitle": "string",
-        "blocks": [
-          {"type": "heading", "content": "string", "level": 2},
-          {"type": "paragraph", "content": "string"},
-          {"type": "quote", "content": "string"},
-          {"type": "list", "items": ["string", "string"]},
-          {"type": "separator"}
-        ]
-      }
-    }`;
-
-    const [aiResult, imageUrl] = await Promise.all([
-      callAI(aiPrompt),
-      generateRealImage(`Cinematic professional header for ${subject}, professional photography, high-tech style`)
+    const aiPrompt = `Act as an expert copywriter. Write a complex blog post about "${subject}".
+Return JSON with {"ideas":[],"finalPost":{"title":"","subtitle":"","blocks":[]}}`;
+    const [text, imageUrl] = await Promise.all([
+      callTextModel(aiPrompt),
+      generateImage(`Cinematic professional header for ${subject}, ${keywords}`, 1200, 600)
     ]);
 
-    if (aiResult) {
-      try {
-        resultData = JSON.parse(aiResult.replace(/```json|```/g, '').trim());
-        resultData.type = 'blog';
-        resultData.finalPost.imageUrl = imageUrl || generateImageURL(`Cinematic professional header for ${subject}, ${keywords}`, 1200, 600, seed);
-      } catch (e) {}
-    }
-
-  } else if (toolId === 'storyboard') {
-    const count = options?.frameCount || 4;
-    const aiPrompt = `Create a ${count}-frame cinematic storyboard about "${subject}". 
-    The narrative must build tension or curiosity.
-    CRITICAL: The FINAL frame MUST contain a shocking, subversive, or deeply ironic twist that completely recontextualizes the previous frames. Think like a "Black Mirror" or "Twilight Zone" ending.
-    Return JSON with:
-    {
-      "scenes": [{"description": "string"}]
-    }`;
-
-    const aiResult = await callAI(aiPrompt);
-    if (aiResult) {
-      try {
-        resultData = JSON.parse(aiResult.replace(/```json|```/g, '').trim());
-        resultData.type = 'storyboard';
-        resultData.scenes = resultData.scenes.map((s: any, i: number) => ({
-          description: s.description,
-          imageUrl: generateImageURL(`Cinematic storyboard scene ${i + 1} about ${subject}, ${keywords}, dramatic lighting`, 800, 450, seed + i)
-        }));
-      } catch (e) {}
-    }
-
-  } else if (toolId === 'ad-creator') {
-    const aiPrompt = `Create high-conversion ad copy for "${subject}". 
-    Return JSON with:
-    {
-      "headline": "string",
-      "cta": "string"
-    }`;
-
-    const [aiResult, imageUrl] = await Promise.all([
-      callAI(aiPrompt),
-      generateRealImage(`Vertical minimalist high-end advertisement visual for ${subject}`, 1080, 1920)
-    ]);
-
-    if (aiResult) {
-      try {
-        resultData = JSON.parse(aiResult.replace(/```json|```/g, '').trim());
-        resultData.type = 'ad';
-        resultData.imageUrl = imageUrl || generateImageURL(`High-end vertical advertisement visual for ${subject}, ${keywords}`, 1080, 1920, seed);
-      } catch (e) {}
-    }
-
-  } else if (toolId === 'podcast') {
-    const aiPrompt = `Write a short podcast intro script about "${subject}". 
-    Return JSON with:
-    {
-      "topicOptions": ["string", "string"],
-      "script": "string"
-    }`;
-
-    const aiResult = await callAI(aiPrompt);
-    if (aiResult) {
-      try {
-        resultData = JSON.parse(aiResult.replace(/```json|```/g, '').trim());
-        resultData.type = 'audio';
-        
-        // Extract the first sentence of the script for the TTS
-        const firstSentence = (resultData.script || "").split('.')[0] || "Welcome to the podcast.";
-        
-        // Use our real TTS generation endpoint!
-        const realAudioUrl = await generateRealAudio(firstSentence);
-        resultData.audioUrl = realAudioUrl || MOCK_AUDIO_BLOB;
-      } catch (e) {}
-    }
-
-  } else if (toolId === 'devils-advocate') {
-    const aiPrompt = `Critique "${subject}" brutally but professionally. 
-    Return JSON with:
-    {
-      "title": "string",
-      "sections": [{"heading": "string", "items": ["string"]}]
-    }`;
-
-    const aiResult = await callAI(aiPrompt);
-    if (aiResult) {
-      try {
-        resultData = JSON.parse(aiResult.replace(/```json|```/g, '').trim());
-        resultData.type = 'strategy';
-      } catch (e) {}
-    }
-
-  } else if (toolId === 'quiz-magnet') {
-    const aiPrompt = `Create a 3-question quiz about "${subject}". 
-    Return JSON with:
-    {
-      "questions": [{"q": "string", "options": ["string"], "answer": "string"}]
-    }`;
-
-    const aiResult = await callAI(aiPrompt);
-    if (aiResult) {
-      try {
-        resultData = JSON.parse(aiResult.replace(/```json|```/g, '').trim());
-        resultData.type = 'quiz';
-      } catch (e) {}
-    }
-  } else if (toolId === 'landing-page') {
-    const aiPrompt = `Design a landing page wireframe for "${subject}".
-    Return JSON with:
-    {
-      "sections": [
-        {"type": "hero", "title": "string", "content": "string"},
-        {"type": "features", "title": "string", "content": "string"},
-        {"type": "social", "title": "string", "content": "string"}
-      ]
-    }`;
-    const aiResult = await callAI(aiPrompt);
-    if (aiResult) {
-      try {
-        resultData = JSON.parse(aiResult.replace(/```json|```/g, '').trim());
-        resultData.type = 'landing';
-        // Add a primary high-res hero image in the result
-        resultData.heroImageUrl = generateImageURL(`Cinematic 8k high fidelity hero visual for ${subject}, professional photography, realistic, atmospheric`, 1200, 800, seed);
-      } catch (e) {}
-    }
-  } else if (toolId === 'email-sequence') {
-    const aiPrompt = `Write a 3-email drip sequence for "${subject}".
-    Return JSON with:
-    {
-      "emails": [{"type": "string", "subject": "string", "body": "string"}]
-    }`;
-    const aiResult = await callAI(aiPrompt);
-    if (aiResult) {
-      try {
-        resultData = JSON.parse(aiResult.replace(/```json|```/g, '').trim());
-        resultData.type = 'email';
-      } catch (e) {}
-    }
-  } else if (toolId === 'carousel') {
-    const aiPrompt = `Create a 5-slide LinkedIn carousel about "${subject}".
-    Return JSON with:
-    {
-      "slides": [{"title": "string", "content": "string", "color": "bg-blue-600"}]
-    }`;
-    const aiResult = await callAI(aiPrompt);
-    if (aiResult) {
-      try {
-        resultData = JSON.parse(aiResult.replace(/```json|```/g, '').trim());
-        resultData.type = 'carousel';
-        resultData.slides = resultData.slides.map((s: any, i: number) => ({
-          ...s,
-          imageUrl: generateImageURL(`Expert presentation slide about ${subject}, professional clean design, ${keywords}`, 1080, 1350, seed + i)
-        }));
-      } catch (e) {}
-    }
-  } else if (toolId === 'campaign-master') {
-    const aiPrompt = `Create a marketing campaign strategy for "${subject}".
-    Return JSON with:
-    {
-      "title": "string",
-      "sections": [{"heading": "string", "items": ["string"]}]
-    }`;
-    const aiResult = await callAI(aiPrompt);
-    if (aiResult) {
-      try {
-        resultData = JSON.parse(aiResult.replace(/```json|```/g, '').trim());
-        resultData.type = 'strategy';
-      } catch (e) {}
-    }
+    const payload = extractJson(text);
+    payload.type = 'blog';
+    payload.finalPost.imageUrl = imageUrl;
+    return payload as ToolOutput;
   }
 
-  const elapsed = Date.now() - start;
-  if (elapsed < latency) await wait(latency - elapsed);
+  if (toolId === 'storyboard') {
+    const count = options?.frameCount || 4;
+    const aiPrompt = `Create a ${count}-frame cinematic storyboard about "${subject}". Return JSON {"scenes":[{"description":""}]}`;
+    const text = await callTextModel(aiPrompt);
+    const payload = extractJson(text);
 
-  if (resultData) return resultData as ToolOutput;
-  return getMockData(toolId, prompt, options);
+    if (!Array.isArray(payload.scenes) || payload.scenes.length === 0) {
+      throw new Error('Storyboard scenes are missing.');
+    }
+
+    const scenes = await Promise.all(
+      payload.scenes.map(async (scene: { description: string }, index: number) => ({
+        description: scene.description,
+        imageUrl: await generateImage(`Cinematic storyboard scene ${index + 1} about ${subject}, ${keywords}, dramatic lighting`, 800, 450)
+      }))
+    );
+
+    return { type: 'storyboard', scenes };
+  }
+
+  if (toolId === 'ad-creator') {
+    const text = await callTextModel(`Create high-conversion ad copy for "${subject}". Return JSON with headline and cta.`);
+    const payload = extractJson(text);
+    const imageUrl = await generateImage(`Vertical high-end advertisement visual for ${subject}`, 1080, 1920);
+    return { type: 'ad', headline: payload.headline, cta: payload.cta, imageUrl };
+  }
+
+  if (toolId === 'podcast') {
+    const text = await callTextModel(`Write a short podcast intro script about "${subject}". Return JSON with topicOptions and script.`);
+    const payload = extractJson(text);
+    const audioUrl = await generateAudio(payload.script);
+    return { type: 'audio', topicOptions: payload.topicOptions, script: payload.script, audioUrl };
+  }
+
+  if (toolId === 'devils-advocate' || toolId === 'campaign-master') {
+    const text = await callTextModel(`Create a strategy critique for "${subject}". Return JSON with title and sections.`);
+    const payload = extractJson(text);
+    return { type: 'strategy', title: payload.title, sections: payload.sections };
+  }
+
+  if (toolId === 'quiz-magnet') {
+    const text = await callTextModel(`Create a 3-question quiz about "${subject}". Return JSON with questions.`);
+    const payload = extractJson(text);
+    return { type: 'quiz', questions: payload.questions };
+  }
+
+  if (toolId === 'landing-page') {
+    const text = await callTextModel(`Design a landing page wireframe for "${subject}". Return JSON with sections.`);
+    const payload = extractJson(text);
+    const heroImageUrl = await generateImage(`Cinematic hero visual for ${subject}, ${keywords}`, 1200, 800);
+    return { type: 'landing', sections: payload.sections, heroImageUrl } as ToolOutput;
+  }
+
+  if (toolId === 'email-sequence') {
+    const text = await callTextModel(`Write a 3-email drip sequence for "${subject}". Return JSON with emails.`);
+    const payload = extractJson(text);
+    return { type: 'email', emails: payload.emails };
+  }
+
+  if (toolId === 'carousel') {
+    const text = await callTextModel(`Create a 5-slide LinkedIn carousel about "${subject}". Return JSON with slides.`);
+    const payload = extractJson(text);
+    const slides = await Promise.all(
+      payload.slides.map(async (slide: { title: string; content: string; color: string }) => ({
+        ...slide,
+        imageUrl: await generateImage(`Presentation slide about ${subject}, ${keywords}`, 1080, 1350)
+      }))
+    );
+    return { type: 'carousel', slides } as ToolOutput;
+  }
+
+  if (toolId === 'meme-lord') {
+    const text = await callTextModel(`Create 3 meme concepts about "${subject}". Return JSON with memes [{topText,bottomText}].`);
+    const payload = extractJson(text);
+    const memes = await Promise.all(
+      payload.memes.map(async (meme: { topText: string; bottomText: string }) => ({
+        ...meme,
+        imageUrl: await generateImage(`Meme template visual about ${subject}, ${keywords}`, 500, 500)
+      }))
+    );
+    return { type: 'meme', memes };
+  }
+
+  if (toolId === 'podcaster-shots') {
+    const prompts = [
+      `Studio portrait host A about ${subject}`,
+      `Studio portrait host B about ${subject}`,
+      `Podcast recording scene for ${subject}`,
+      `Podcast behind-the-scenes for ${subject}`
+    ];
+
+    const images = await Promise.all(prompts.map((imagePrompt) => generateImage(imagePrompt, 600, 800)));
+    return {
+      type: 'podcaster',
+      characterA: [images[0], images[2] || CHARACTER_A_IDS[0]],
+      characterB: [images[1], images[3] || CHARACTER_B_IDS[0]]
+    };
+  }
+
+  if (toolId === 'short-video') {
+    const response = await apiPost<{ data: { videoUrl: string } }>('/api/media/video', {
+      prompt: `Create a short promotional video about ${subject}`
+    });
+    return { type: 'video', videoUrl: response.data.videoUrl, duration: 'unknown' };
+  }
+
+  throw new Error(`Unsupported tool: ${toolId}`);
 };
-
