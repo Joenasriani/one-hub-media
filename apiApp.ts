@@ -473,7 +473,14 @@ export const createApiApp = () => {
     try {
       const body = ensureObject(req.body);
       if (!body) return sendError(res, 400, "validation_error", "Request body must be a JSON object.");
-      const result = await routeByType("text", body);
+      const prompt = parseText(body.prompt);
+      if (!prompt) return sendError(res, 400, "validation_error", "A non-empty prompt is required.");
+      const result = await generateTextWithOpenRouter({
+        prompt,
+        systemInstruction: parseText(body.systemInstruction) || undefined,
+        model: parseText(body.model) || undefined,
+        outputType: "text"
+      });
       return res.json({ text: result.data.text, model: result.data.model, warnings: result.warnings || [] });
     } catch (error: any) {
       return sendError(res, error.status || 500, error.code || "provider_server_error", error.message || "AI generation failed.", error.details, error.warnings);
@@ -484,7 +491,9 @@ export const createApiApp = () => {
     try {
       const body = ensureObject(req.body);
       if (!body) return sendError(res, 400, "validation_error", "Request body must be a JSON object.");
-      const result = await routeByType("tts", body);
+      const text = parseText(body.text);
+      if (!text) return sendError(res, 400, "validation_error", "TTS text is required.");
+      const result = await generateTtsAudio(text, parseText(body.voice) || undefined);
       return res.json({ audio: result.data.audioUrl, ...result.data, warnings: result.warnings || [] });
     } catch (error: any) {
       return sendError(res, error.status || 500, error.code || "provider_server_error", error.message || "TTS generation failed.", error.details, error.warnings);
