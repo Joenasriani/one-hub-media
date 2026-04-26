@@ -1,0 +1,4 @@
+/* Intentionally present to satisfy index.html stylesheet reference and avoid 404s. */
+html, body, #root {
+  min-height: 100%;
+}

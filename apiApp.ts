@@ -293,7 +293,7 @@ const generatePdf = async (title: string, content: string): Promise<ApiSuccess<{
   const base64 = dataUri.split(",")[1] || "";
   const sizeBytes = Buffer.from(base64, "base64").length;
 
-  if (!dataUri.startsWith("data:application/pdf;base64,")) {
+  if (!/^data:application\/pdf(?:;[^,]*)?,/i.test(dataUri)) {
     throw { status: 502, code: "invalid_provider_response", message: "PDF generation produced invalid output." };
   }
 
