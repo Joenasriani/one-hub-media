@@ -5,6 +5,7 @@ export interface Tool {
   category: 'Creation' | 'Strategy' | 'Wildcard' | 'Misc';
   description: string;
   icon: string;
+  availableInFree?: boolean;
 }
 
 export interface ContextBrief {

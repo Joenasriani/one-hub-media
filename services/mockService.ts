@@ -11,6 +11,7 @@ const SYSTEM_INSTRUCTION = `You are One AI Hub, a production content engine.
 Return raw JSON only, no markdown or code fences.
 Do not hallucinate URLs or files.
 If facts are uncertain, clearly state uncertainty inside JSON fields.`;
+const FREE_UNAVAILABLE_TOOLS = new Set(['podcast', 'short-video']);
 
 const assertNotPlaceholder = (value: string, fieldName: string) => {
   const normalized = value.toLowerCase();
@@ -23,11 +24,18 @@ const assertNotPlaceholder = (value: string, fieldName: string) => {
 };
 
 const apiPost = async <T>(url: string, body: Record<string, unknown>): Promise<T> => {
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+  } catch (err: any) {
+    const error = new Error(err?.message || 'Network error while calling API.') as ApiError;
+    error.code = 'provider_server_error';
+    throw error;
+  }
 
   const payload = await response.json().catch(() => null);
 
@@ -50,8 +58,7 @@ const extractJson = (text: string): any => {
 const callTextModel = async (prompt: string, systemInstruction: string = SYSTEM_INSTRUCTION): Promise<string> => {
   const response = await apiPost<{ data: { text: string } }>('/api/ai/text', {
     prompt,
-    systemInstruction,
-    model: 'openrouter/auto'
+    systemInstruction
   });
 
   const text = response?.data?.text?.trim();
@@ -77,17 +84,6 @@ const generateImage = async (prompt: string, width: number, height: number): Pro
   return url;
 };
 
-const generateAudio = async (text: string): Promise<string> => {
-  const response = await apiPost<{ data: { audioUrl: string } }>('/api/media/tts', { text, voice: 'Kore' });
-  const url = response?.data?.audioUrl;
-  if (!url) {
-    const error = new Error('TTS provider returned no audio URL.') as ApiError;
-    error.code = 'empty_generation_result';
-    throw error;
-  }
-  return url;
-};
-
 export const fetchGeminiBrief = async (topic: string): Promise<ContextBrief> => {
   const response = await apiPost<{ data: { text: string } }>('/api/ai/research', { topic });
   const parsed = extractJson(response.data.text) as ContextBrief;
@@ -98,6 +94,10 @@ export const fetchGeminiBrief = async (topic: string): Promise<ContextBrief> => 
 };
 
 export const generateContent = async (toolId: string, prompt: string, options?: any): Promise<ToolOutput> => {
+  if (FREE_UNAVAILABLE_TOOLS.has(toolId)) {
+    throw new Error('Not available in free version');
+  }
+
   const { subject, keywords } = inferSubject(prompt);
 
   if (toolId === 'blog-studio') {
@@ -139,13 +139,6 @@ Return JSON with {"ideas":[],"finalPost":{"title":"","subtitle":"","blocks":[]}}
     const payload = extractJson(text);
     const imageUrl = await generateImage(`Vertical high-end advertisement visual for ${subject}`, 1080, 1920);
     return { type: 'ad', headline: payload.headline, cta: payload.cta, imageUrl };
-  }
-
-  if (toolId === 'podcast') {
-    const text = await callTextModel(`Write a short podcast intro script about "${subject}". Return JSON with topicOptions and script.`);
-    const payload = extractJson(text);
-    const audioUrl = await generateAudio(payload.script);
-    return { type: 'audio', topicOptions: payload.topicOptions, script: payload.script, audioUrl };
   }
 
   if (toolId === 'devils-advocate' || toolId === 'campaign-master') {
@@ -211,13 +204,6 @@ Return JSON with {"ideas":[],"finalPost":{"title":"","subtitle":"","blocks":[]}}
       characterA: [images[0], images[2] || CHARACTER_A_IDS[0]],
       characterB: [images[1], images[3] || CHARACTER_B_IDS[0]]
     };
-  }
-
-  if (toolId === 'short-video') {
-    const response = await apiPost<{ data: { videoUrl: string } }>('/api/media/video', {
-      prompt: `Create a short promotional video about ${subject}`
-    });
-    return { type: 'video', videoUrl: response.data.videoUrl, duration: 'unknown' };
   }
 
   throw new Error(`Unsupported tool: ${toolId}`);

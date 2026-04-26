@@ -7,7 +7,7 @@ export const TOOLS: Tool[] = [
   // Creation
   { id: 'blog-studio', name: 'Interactive Blog Studio', category: 'Creation', description: 'Generate viral blog posts with imagery.', icon: 'PenTool' },
   { id: 'storyboard', name: 'Cinematic Storyboard', category: 'Creation', description: 'Visualise scripts with 4-panel scenes.', icon: 'Film' },
-  { id: 'podcast', name: 'Podcast Generator', category: 'Creation', description: 'Turn text into audio scripts & voice.', icon: 'Mic' },
+  { id: 'podcast', name: 'Podcast Generator', category: 'Creation', description: 'Not available in free version', icon: 'Mic', availableInFree: false },
   { id: 'ad-creator', name: 'Ad Post Creator', category: 'Creation', description: 'High-conversion social ads.', icon: 'Megaphone' },
   { id: 'podcaster-shots', name: 'Podcaster Shots', category: 'Creation', description: 'Studio-quality promo images.', icon: 'Camera' },
   
@@ -22,7 +22,7 @@ export const TOOLS: Tool[] = [
   { id: 'quiz-magnet', name: 'The Quiz Magnet', category: 'Wildcard', description: 'Engagement quizzes.', icon: 'HelpCircle' },
 
   // Misc
-  { id: 'short-video', name: 'Short Video Generator', category: 'Misc', description: 'Text-to-Video processing.', icon: 'Video' },
+  { id: 'short-video', name: 'Short Video Generator', category: 'Misc', description: 'Not available in free version', icon: 'Video', availableInFree: false },
   { id: 'carousel', name: 'LinkedIn/IG Carousel', category: 'Misc', description: 'Slide deck generation.', icon: 'Layers' },
 ];
 

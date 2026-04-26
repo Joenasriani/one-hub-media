@@ -1,8 +1,10 @@
 import express from "express";
 
-const DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+const OPENROUTER_CHAT_COMPLETIONS_URL = "https://openrouter.ai/api/v1/chat/completions";
+const OPENROUTER_TIMEOUT_MS = 30000;
+const REPLICATE_API_BASE_URL = "https://api.replicate.com/v1";
 
-type OutputType = "text" | "research" | "caption" | "copy" | "script" | "image" | "audio" | "tts" | "video" | "pdf";
+type OutputType = "text" | "research" | "vision" | "caption" | "copy" | "script" | "image" | "audio" | "tts" | "video" | "pdf";
 
 type ApiErrorCode =
   | "validation_error"
@@ -35,22 +37,21 @@ interface TextGenerationPayload {
   prompt: string;
   systemInstruction?: string;
   model?: string;
+  outputType?: "text" | "research" | "vision";
+  imageUrl?: string;
 }
 
-const getOpenRouterKey = () => process.env.OPENROUTER_API_KEY || process.env.ONE_HUB_MEDIA_API;
-const getOpenRouterBaseUrl = () => (process.env.OPENROUTER_BASE_URL || DEFAULT_OPENROUTER_BASE_URL).replace(/\/+$/, "");
-const getOpenRouterApiUrl = () => `${getOpenRouterBaseUrl()}/chat/completions`;
+const getOpenRouterKey = () => process.env.OPENROUTER_API_KEY;
 const getOpenRouterTimeoutMs = () => {
-  const timeout = Number(process.env.OPENROUTER_TIMEOUT_MS || 30000);
-  return Number.isFinite(timeout) && timeout > 0 ? timeout : 30000;
+  const timeout = Number(process.env.OPENROUTER_TIMEOUT_MS || OPENROUTER_TIMEOUT_MS);
+  return Number.isFinite(timeout) && timeout > 0 ? timeout : OPENROUTER_TIMEOUT_MS;
 };
 
-const getDefaultModelForType = (type: "text" | "research") => {
-  if (type === "research") {
-    return process.env.RESEARCH_MODEL || process.env.OPENROUTER_RESEARCH_MODEL || process.env.OPENROUTER_TEXT_MODEL || process.env.AI_MODEL || "openrouter/auto";
-  }
-
-  return process.env.TEXT_MODEL || process.env.OPENROUTER_TEXT_MODEL || process.env.AI_MODEL || "openrouter/auto";
+const getModelForType = (type: "text" | "research" | "vision" | "fallback") => {
+  if (type === "text") return process.env.TEXT_MODEL || process.env.AI_MODEL || "openrouter/auto";
+  if (type === "research") return process.env.RESEARCH_MODEL || process.env.AI_MODEL || "openrouter/auto";
+  if (type === "vision") return process.env.VISION_MODEL || process.env.AI_MODEL || "openrouter/auto";
+  return process.env.AI_MODEL || "openrouter/auto";
 };
 
 const sendError = (res: express.Response, status: number, code: ApiErrorCode, message: string, details?: string, warnings?: string[]) => {
@@ -68,15 +69,6 @@ const ensureObject = (value: unknown): Record<string, unknown> | null => {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 };
 
-const buildMessages = (prompt: string, systemInstruction?: string) => {
-  const messages: Array<{ role: "system" | "user"; content: string }> = [];
-  if (systemInstruction) {
-    messages.push({ role: "system", content: systemInstruction });
-  }
-  messages.push({ role: "user", content: prompt });
-  return messages;
-};
-
 const parseOpenRouterError = (status: number, fallbackMessage: string): { code: ApiErrorCode; message: string } => {
   if (status === 401) return { code: "provider_unauthorized", message: "OpenRouter rejected the API key (401)." };
   if (status === 402) return { code: "provider_quota_exceeded", message: "OpenRouter quota or credits were exceeded (402)." };
@@ -85,34 +77,60 @@ const parseOpenRouterError = (status: number, fallbackMessage: string): { code: 
   return { code: "invalid_provider_response", message: fallbackMessage };
 };
 
-const generateTextWithOpenRouter = async (
-  payload: TextGenerationPayload & { outputType?: "text" | "research" }
-): Promise<ApiSuccess<{ text: string; model: string }>> => {
-  const openRouterKey = getOpenRouterKey();
-  if (!openRouterKey) {
-    throw { status: 503, code: "missing_api_key", message: "OPENROUTER_API_KEY is required for text/research generation." };
+const buildChatMessages = (payload: TextGenerationPayload) => {
+  const systemInstruction = parseText(payload.systemInstruction);
+  const prompt = payload.prompt;
+
+  if (payload.outputType === "vision" && payload.imageUrl) {
+    const visionMessages: Array<Record<string, unknown>> = [];
+    if (systemInstruction) {
+      visionMessages.push({ role: "system", content: systemInstruction });
+    }
+
+    visionMessages.push({
+      role: "user",
+      content: [
+        { type: "text", text: prompt },
+        { type: "image_url", image_url: { url: payload.imageUrl } }
+      ]
+    });
+
+    return visionMessages;
   }
 
-  const selectedModel = payload.model || getDefaultModelForType(payload.outputType || "text");
-  const model = selectedModel === "openrouter/auto" ? "openrouter/auto" : selectedModel;
+  const messages: Array<{ role: "system" | "user"; content: string }> = [];
+  if (systemInstruction) messages.push({ role: "system", content: systemInstruction });
+  messages.push({ role: "user", content: prompt });
+  return messages;
+};
 
-  const response = await fetch(getOpenRouterApiUrl(), {
+const generateOpenRouterText = async (
+  payload: TextGenerationPayload
+): Promise<ApiSuccess<{ text: string; model: string; route: "text" | "research" | "vision" | "fallback" }>> => {
+  const openRouterKey = getOpenRouterKey();
+  if (!openRouterKey) {
+    throw { status: 503, code: "missing_api_key", message: "OPENROUTER_API_KEY is required for AI generation." };
+  }
+
+  const route = payload.outputType || "text";
+  const model = parseText(payload.model) || getModelForType(route) || getModelForType("fallback");
+
+  const response = await fetch(OPENROUTER_CHAT_COMPLETIONS_URL, {
     method: "POST",
     signal: AbortSignal.timeout(getOpenRouterTimeoutMs()),
     headers: {
       Authorization: `Bearer ${openRouterKey}`,
-      "HTTP-Referer": process.env.ONE_HUB_MEDIA_REFERER || "https://one-hub-media.local",
-      "X-Title": "One Hub Media",
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
       model,
-      messages: buildMessages(payload.prompt, payload.systemInstruction)
+      messages: buildChatMessages(payload)
     })
   });
 
   const raw = await response.text();
   let parsed: any;
+
   try {
     parsed = JSON.parse(raw);
   } catch {
@@ -135,14 +153,6 @@ const generateTextWithOpenRouter = async (
   }
 
   const text = parseText(parsed?.choices?.[0]?.message?.content);
-  if (!parsed?.choices || !Array.isArray(parsed.choices) || parsed.choices.length === 0) {
-    throw {
-      status: 502,
-      code: "invalid_provider_response",
-      message: "OpenRouter returned empty choices."
-    };
-  }
-
   if (!text) {
     throw {
       status: 502,
@@ -151,129 +161,98 @@ const generateTextWithOpenRouter = async (
     };
   }
 
-  return { data: { text, model } };
+  return { data: { text, model, route } };
 };
 
-const generateImage = async (prompt: string, width = 1024, height = 1024): Promise<ApiSuccess<{ imageUrl: string; provider: string }>> => {
-  const cleanPrompt = prompt.trim();
-  const seed = Math.floor(Math.random() * 1000000);
-  const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?seed=${seed}&width=${width}&height=${height}&nologo=true&model=flux`;
+const pollReplicatePrediction = async (id: string, replicateKey: string) => {
+  const timeoutAt = Date.now() + 120000;
 
-  if (!/^https:\/\/image\.pollinations\.ai\//.test(imageUrl)) {
-    throw { status: 502, code: "invalid_provider_response", message: "Image provider returned an invalid URL." };
-  }
-
-  return {
-    data: {
-      imageUrl,
-      provider: "pollinations"
-    }
-  };
-};
-
-const decodePcmBase64ToWavDataUrl = (base64Pcm: string): { audioUrl: string; mimeType: string; format: string; sizeBytes: number } => {
-  const pcm = Buffer.from(base64Pcm, "base64");
-  const sampleRate = 24000;
-  const bitsPerSample = 16;
-  const channels = 1;
-  const blockAlign = (channels * bitsPerSample) / 8;
-  const byteRate = sampleRate * blockAlign;
-  const dataSize = pcm.length;
-  const wavHeader = Buffer.alloc(44);
-
-  wavHeader.write("RIFF", 0);
-  wavHeader.writeUInt32LE(36 + dataSize, 4);
-  wavHeader.write("WAVE", 8);
-  wavHeader.write("fmt ", 12);
-  wavHeader.writeUInt32LE(16, 16);
-  wavHeader.writeUInt16LE(1, 20);
-  wavHeader.writeUInt16LE(channels, 22);
-  wavHeader.writeUInt32LE(sampleRate, 24);
-  wavHeader.writeUInt32LE(byteRate, 28);
-  wavHeader.writeUInt16LE(blockAlign, 32);
-  wavHeader.writeUInt16LE(bitsPerSample, 34);
-  wavHeader.write("data", 36);
-  wavHeader.writeUInt32LE(dataSize, 40);
-
-  const wav = Buffer.concat([wavHeader, pcm]);
-  return {
-    audioUrl: `data:audio/wav;base64,${wav.toString("base64")}`,
-    mimeType: "audio/wav",
-    format: "wav",
-    sizeBytes: wav.length
-  };
-};
-
-const generateTtsAudio = async (
-  text: string,
-  voice = process.env.GEMINI_TTS_VOICE || "Kore"
-): Promise<ApiSuccess<{ audioUrl: string; mimeType: string; format: string; sizeBytes: number; durationSeconds?: number }>> => {
-  const geminiKey = process.env.GEMINI_API_KEY;
-  if (!geminiKey) {
-    throw {
-      status: 503,
-      code: "provider_not_configured",
-      message: "GEMINI_API_KEY is required for TTS/audio generation."
-    };
-  }
-
-  const ttsModel = process.env.GEMINI_TTS_MODEL || "gemini-3.1-flash-tts-preview";
-  const maxChars = Number(process.env.TTS_MAX_CHARS || 0);
-  let requestText = text;
-  const warnings: string[] = [];
-
-  if (maxChars > 0 && requestText.length > maxChars) {
-    requestText = requestText.slice(0, maxChars);
-    warnings.push(`TTS input was truncated to ${maxChars} characters by TTS_MAX_CHARS.`);
-  }
-
-  const { GoogleGenAI } = await import("@google/genai");
-  const ai = new GoogleGenAI({ apiKey: geminiKey });
-  const response = await ai.models.generateContent({
-    model: ttsModel,
-    contents: [{ parts: [{ text: requestText }] }],
-    config: {
-      responseModalities: ["AUDIO"],
-      speechConfig: {
-        voiceConfig: {
-          prebuiltVoiceConfig: { voiceName: voice }
-        }
+  while (Date.now() < timeoutAt) {
+    const pollResponse = await fetch(`${REPLICATE_API_BASE_URL}/predictions/${id}`, {
+      headers: {
+        Authorization: `Token ${replicateKey}`,
+        "Content-Type": "application/json"
       }
+    });
+
+    const pollJson = await pollResponse.json().catch(() => null);
+
+    if (!pollResponse.ok) {
+      throw {
+        status: pollResponse.status || 502,
+        code: "invalid_provider_response",
+        message: "Replicate polling failed.",
+        details: JSON.stringify(pollJson || {})
+      };
     }
-  });
 
-  const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-  if (!base64Audio || typeof base64Audio !== "string") {
-    throw {
-      status: 502,
-      code: "invalid_provider_response",
-      message: "TTS provider did not return audio content."
-    };
-  }
+    const status = pollJson?.status;
+    if (status === "succeeded") return pollJson;
+    if (status === "failed" || status === "canceled") {
+      throw {
+        status: 502,
+        code: "provider_server_error",
+        message: `Replicate ${status} the image request.`,
+        details: pollJson?.error
+      };
+    }
 
-  const audio = decodePcmBase64ToWavDataUrl(base64Audio);
-  const estimatedDuration = Math.round((audio.sizeBytes / (24000 * 2)) * 100) / 100;
-
-  return {
-    data: { ...audio, durationSeconds: estimatedDuration },
-    warnings
-  };
-};
-
-const generateVideo = async (_prompt: string): Promise<ApiSuccess<{ videoUrl: string; provider: string }>> => {
-  if (!process.env.VIDEO_PROVIDER_API_KEY) {
-    throw {
-      status: 501,
-      code: "provider_not_configured",
-      message: "No video provider is configured. Set VIDEO_PROVIDER_API_KEY and integrate a supported provider."
-    };
+    await new Promise((resolve) => setTimeout(resolve, 1500));
   }
 
   throw {
-    status: 501,
-    code: "unsupported_provider",
-    message: "Configured video provider is not supported in this deployment yet."
+    status: 504,
+    code: "provider_server_error",
+    message: "Timed out while waiting for Replicate image output."
   };
+};
+
+const generateImageWithReplicate = async (prompt: string): Promise<ApiSuccess<{ imageUrl: string; provider: string; model: string }>> => {
+  const replicateKey = process.env.REPLICATE_API_KEY;
+  if (!replicateKey) {
+    throw {
+      status: 503,
+      code: "provider_not_configured",
+      message: "Not available in free version: set REPLICATE_API_KEY to enable image generation."
+    };
+  }
+
+  const model = process.env.IMAGE_MODEL || "stability-ai/sdxl";
+  const createResponse = await fetch(`${REPLICATE_API_BASE_URL}/predictions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Token ${replicateKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model,
+      input: { prompt }
+    })
+  });
+
+  const createJson = await createResponse.json().catch(() => null);
+  if (!createResponse.ok || !createJson?.id) {
+    throw {
+      status: createResponse.status || 502,
+      code: "invalid_provider_response",
+      message: "Replicate failed to create an image prediction.",
+      details: JSON.stringify(createJson || {})
+    };
+  }
+
+  const finished = await pollReplicatePrediction(createJson.id, replicateKey);
+  const output = finished?.output;
+  const imageUrl = Array.isArray(output) ? parseText(output[0]) : parseText(output);
+
+  if (!imageUrl) {
+    throw {
+      status: 502,
+      code: "empty_generation_result",
+      message: "Replicate returned no image URL."
+    };
+  }
+
+  return { data: { imageUrl, provider: "replicate", model } };
 };
 
 const generatePdf = async (title: string, content: string): Promise<ApiSuccess<{ fileName: string; mimeType: string; dataUrl: string; sizeBytes: number }>> => {
@@ -310,43 +289,63 @@ const generatePdf = async (title: string, content: string): Promise<ApiSuccess<{
 const routeByType = async (type: OutputType, input: Record<string, unknown>) => {
   switch (type) {
     case "text":
-    case "research":
     case "caption":
     case "copy":
     case "script": {
       const prompt = parseText(input.prompt);
-      if (!prompt) {
-        throw { status: 400, code: "validation_error", message: "A non-empty prompt is required." };
-      }
-      return generateTextWithOpenRouter({
+      if (!prompt) throw { status: 400, code: "validation_error", message: "A non-empty prompt is required." };
+      return generateOpenRouterText({
         prompt,
         systemInstruction: parseText(input.systemInstruction) || undefined,
         model: parseText(input.model) || undefined,
-        outputType: type === "research" ? "research" : "text"
+        outputType: "text"
       });
     }
+
+    case "research": {
+      const prompt = parseText(input.topic) || parseText(input.prompt);
+      if (!prompt) throw { status: 400, code: "validation_error", message: "Research topic is required." };
+      return generateOpenRouterText({
+        prompt: `Create a concise, factual research brief about: ${prompt}`,
+        systemInstruction: parseText(input.systemInstruction) || "You are a research assistant. Return JSON-safe plain text with citations where possible.",
+        model: parseText(input.model) || undefined,
+        outputType: "research"
+      });
+    }
+
+    case "vision": {
+      const prompt = parseText(input.prompt);
+      const imageUrl = parseText(input.imageUrl);
+      if (!prompt || !imageUrl) throw { status: 400, code: "validation_error", message: "Vision requests require prompt and imageUrl." };
+      return generateOpenRouterText({
+        prompt,
+        imageUrl,
+        systemInstruction: parseText(input.systemInstruction) || undefined,
+        model: parseText(input.model) || undefined,
+        outputType: "vision"
+      });
+    }
+
     case "image": {
       const prompt = parseText(input.prompt);
       if (!prompt) throw { status: 400, code: "validation_error", message: "Image prompt is required." };
-      return generateImage(prompt, Number(input.width) || 1024, Number(input.height) || 1024);
+      return generateImageWithReplicate(prompt);
     }
+
     case "audio":
-    case "tts": {
-      const text = parseText(input.text);
-      if (!text) throw { status: 400, code: "validation_error", message: "TTS text is required." };
-      return generateTtsAudio(text, parseText(input.voice) || undefined);
-    }
-    case "video": {
-      const prompt = parseText(input.prompt);
-      if (!prompt) throw { status: 400, code: "validation_error", message: "Video prompt is required." };
-      return generateVideo(prompt);
-    }
+    case "tts":
+      throw { status: 501, code: "unsupported_provider", message: "Not available in free version" };
+
+    case "video":
+      throw { status: 501, code: "unsupported_provider", message: "Not available in free version" };
+
     case "pdf": {
       const title = parseText(input.title) || "One Hub Media Export";
       const content = parseText(input.content);
       if (!content) throw { status: 400, code: "validation_error", message: "PDF content is required." };
       return generatePdf(title, content);
     }
+
     default:
       throw { status: 400, code: "unsupported_media_type", message: `Unsupported output type: ${type}` };
   }
@@ -359,10 +358,13 @@ export const createApiApp = () => {
   app.get("/api/ai/health", (_req, res) => {
     return res.json({
       openRouterConfigured: Boolean(getOpenRouterKey()),
-      geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
-      imageProviderConfigured: true,
-      audioProviderConfigured: Boolean(process.env.GEMINI_API_KEY),
-      videoProviderConfigured: Boolean(process.env.VIDEO_PROVIDER_API_KEY),
+      replicateConfigured: Boolean(process.env.REPLICATE_API_KEY),
+      textModel: getModelForType("text"),
+      researchModel: getModelForType("research"),
+      visionModel: getModelForType("vision"),
+      imageModel: process.env.IMAGE_MODEL || "stability-ai/sdxl",
+      audioSupported: false,
+      videoSupported: false,
       pdfGenerationAvailable: true
     });
   });
@@ -382,17 +384,21 @@ export const createApiApp = () => {
     try {
       const body = ensureObject(req.body);
       if (!body) return sendError(res, 400, "validation_error", "Request body must be a JSON object.");
-      const prompt = parseText(body.topic) || parseText(body.prompt);
-      if (!prompt) return sendError(res, 400, "validation_error", "Research topic is required.");
-      const result = await generateTextWithOpenRouter({
-        prompt: `Create a concise, factual research brief about: ${prompt}`,
-        systemInstruction: parseText(body.systemInstruction) || "You are a research assistant. Return JSON-safe plain text with citations where possible.",
-        model: parseText(body.model) || undefined,
-        outputType: "research"
-      });
+      const result = await routeByType("research", body);
       return res.json(result);
     } catch (error: any) {
       return sendError(res, error.status || 500, error.code || "provider_server_error", error.message || "Research generation failed.", error.details, error.warnings);
+    }
+  });
+
+  app.post("/api/ai/vision", async (req, res) => {
+    try {
+      const body = ensureObject(req.body);
+      if (!body) return sendError(res, 400, "validation_error", "Request body must be a JSON object.");
+      const result = await routeByType("vision", body);
+      return res.json(result);
+    } catch (error: any) {
+      return sendError(res, error.status || 500, error.code || "provider_server_error", error.message || "Vision generation failed.", error.details, error.warnings);
     }
   });
 
@@ -407,38 +413,9 @@ export const createApiApp = () => {
     }
   });
 
-  app.post("/api/media/tts", async (req, res) => {
-    try {
-      const body = ensureObject(req.body);
-      if (!body) return sendError(res, 400, "validation_error", "Request body must be a JSON object.");
-      const result = await routeByType("tts", body);
-      return res.json(result);
-    } catch (error: any) {
-      return sendError(res, error.status || 500, error.code || "provider_server_error", error.message || "TTS generation failed.", error.details, error.warnings);
-    }
-  });
-
-  app.post("/api/media/audio", async (req, res) => {
-    try {
-      const body = ensureObject(req.body);
-      if (!body) return sendError(res, 400, "validation_error", "Request body must be a JSON object.");
-      const result = await routeByType("audio", body);
-      return res.json(result);
-    } catch (error: any) {
-      return sendError(res, error.status || 500, error.code || "provider_server_error", error.message || "Audio generation failed.", error.details, error.warnings);
-    }
-  });
-
-  app.post("/api/media/video", async (req, res) => {
-    try {
-      const body = ensureObject(req.body);
-      if (!body) return sendError(res, 400, "validation_error", "Request body must be a JSON object.");
-      const result = await routeByType("video", body);
-      return res.json(result);
-    } catch (error: any) {
-      return sendError(res, error.status || 500, error.code || "provider_server_error", error.message || "Video generation failed.", error.details, error.warnings);
-    }
-  });
+  app.post("/api/media/tts", (_req, res) => sendError(res, 501, "unsupported_provider", "Not available in free version"));
+  app.post("/api/media/audio", (_req, res) => sendError(res, 501, "unsupported_provider", "Not available in free version"));
+  app.post("/api/media/video", (_req, res) => sendError(res, 501, "unsupported_provider", "Not available in free version"));
 
   app.post("/api/media/pdf", async (req, res) => {
     try {
@@ -475,30 +452,19 @@ export const createApiApp = () => {
       if (!body) return sendError(res, 400, "validation_error", "Request body must be a JSON object.");
       const prompt = parseText(body.prompt);
       if (!prompt) return sendError(res, 400, "validation_error", "A non-empty prompt is required.");
-      const result = await generateTextWithOpenRouter({
+      const result = await generateOpenRouterText({
         prompt,
         systemInstruction: parseText(body.systemInstruction) || undefined,
         model: parseText(body.model) || undefined,
         outputType: "text"
       });
-      return res.json({ text: result.data.text, model: result.data.model, warnings: result.warnings || [] });
+      return res.json({ text: result.data.text, model: result.data.model, route: result.data.route, warnings: result.warnings || [] });
     } catch (error: any) {
       return sendError(res, error.status || 500, error.code || "provider_server_error", error.message || "AI generation failed.", error.details, error.warnings);
     }
   });
 
-  app.post("/api/ai/tts", async (req, res) => {
-    try {
-      const body = ensureObject(req.body);
-      if (!body) return sendError(res, 400, "validation_error", "Request body must be a JSON object.");
-      const text = parseText(body.text);
-      if (!text) return sendError(res, 400, "validation_error", "TTS text is required.");
-      const result = await generateTtsAudio(text, parseText(body.voice) || undefined);
-      return res.json({ audio: result.data.audioUrl, ...result.data, warnings: result.warnings || [] });
-    } catch (error: any) {
-      return sendError(res, error.status || 500, error.code || "provider_server_error", error.message || "TTS generation failed.", error.details, error.warnings);
-    }
-  });
+  app.post("/api/ai/tts", (_req, res) => sendError(res, 501, "unsupported_provider", "Not available in free version"));
 
   return app;
 };

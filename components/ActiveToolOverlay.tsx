@@ -32,6 +32,7 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
   const [regenKey, setRegenKey] = useState(0);
 
   const exportRef = useRef<HTMLDivElement>(null);
+  const isUnavailableInFree = tool.availableInFree === false;
 
   const handleGenerate = async () => {
     setLoading(true);
@@ -65,12 +66,34 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
 
   // Initial Generation Effect
   useEffect(() => {
+    if (isUnavailableInFree) return;
     // For storyboard, wait for user input first
     if (tool.id !== 'storyboard') {
       handleGenerate();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isUnavailableInFree]);
+
+  if (isUnavailableInFree) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6">
+        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
+        <motion.div
+          layoutId={`tool-${tool.id}`}
+          className="relative w-full max-w-lg bg-slate-950 border border-white/10 rounded-3xl shadow-2xl overflow-hidden flex flex-col p-8"
+        >
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-white">{tool.name}</h2>
+            <button onClick={onClose}><X className="text-slate-400" /></button>
+          </div>
+          <p className="text-slate-300 text-sm leading-relaxed mb-8">
+            Not available in free version.
+          </p>
+          <Button onClick={onClose} className="w-full py-4 text-lg">Close</Button>
+        </motion.div>
+      </div>
+    );
+  }
 
   const handleCopy = async (text: string) => {
     if (navigator.clipboard) {
