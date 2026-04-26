@@ -23,13 +23,13 @@ const assertNotPlaceholder = (value: string, fieldName: string) => {
   }
 };
 
-const apiPost = async <T>(url: string, body: Record<string, unknown>): Promise<T> => {
+const apiPost = async <T>(prompt: string): Promise<T> => {
   let response: Response;
   try {
-    response = await fetch(url, {
+    response = await fetch('/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
+      body: JSON.stringify({ prompt })
     });
   } catch (err: any) {
     const error = new Error(err?.message || 'Network error while calling API.') as ApiError;
@@ -40,14 +40,19 @@ const apiPost = async <T>(url: string, body: Record<string, unknown>): Promise<T
   const payload = await response.json().catch(() => null);
 
   if (!response.ok) {
-    const error = new Error(payload?.error?.message || `Request failed: ${response.status}`) as ApiError;
-    error.code = payload?.error?.code;
+    const error = new Error(payload?.error || payload?.message || `Request failed: ${response.status}`) as ApiError;
     error.status = response.status;
-    error.details = payload?.error?.details;
     throw error;
   }
 
-  return payload as T;
+  const content = payload?.choices?.[0]?.message?.content?.trim();
+  if (!content) {
+    const error = new Error('Provider returned empty text.') as ApiError;
+    error.code = 'empty_generation_result';
+    throw error;
+  }
+
+  return { data: { text: content } } as T;
 };
 
 const extractJson = (text: string): any => {
@@ -56,10 +61,7 @@ const extractJson = (text: string): any => {
 };
 
 const callTextModel = async (prompt: string, systemInstruction: string = SYSTEM_INSTRUCTION): Promise<string> => {
-  const response = await apiPost<{ data: { text: string } }>('/api/ai/text', {
-    prompt,
-    systemInstruction
-  });
+  const response = await apiPost<{ data: { text: string } }>(`${systemInstruction}\n\n${prompt}`);
 
   const text = response?.data?.text?.trim();
   if (!text) {
@@ -73,8 +75,8 @@ const callTextModel = async (prompt: string, systemInstruction: string = SYSTEM_
 };
 
 const generateImage = async (prompt: string, width: number, height: number): Promise<string> => {
-  const response = await apiPost<{ data: { imageUrl: string } }>('/api/media/image', { prompt, width, height });
-  const url = response?.data?.imageUrl;
+  const response = await apiPost<{ data: { text: string } }>(`Generate a direct image URL only for this prompt (no markdown): ${prompt}. Size ${width}x${height}.`);
+  const url = response?.data?.text;
   if (!url) {
     const error = new Error('Image provider returned no image URL.') as ApiError;
     error.code = 'empty_generation_result';
@@ -85,7 +87,7 @@ const generateImage = async (prompt: string, width: number, height: number): Pro
 };
 
 export const fetchGeminiBrief = async (topic: string): Promise<ContextBrief> => {
-  const response = await apiPost<{ data: { text: string } }>('/api/ai/research', { topic });
+  const response = await apiPost<{ data: { text: string } }>(`Provide research in raw JSON with fields summary, headlines, hashtags about: ${topic}`);
   const parsed = extractJson(response.data.text) as ContextBrief;
   if (!parsed.summary || !parsed.headlines || !parsed.hashtags) {
     throw new Error('Research response structure is invalid.');
