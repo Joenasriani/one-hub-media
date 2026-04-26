@@ -6,7 +6,7 @@ import { Tool, ToolOutput, BlogBlock } from '../types';
 import { generateContent } from '../services/mockService';
 import { Button } from './ui/Button';
 import { useApp } from '../context/AppContext';
-import { inferSubject } from '../constants';
+import { generateImageURL, inferSubject } from '../constants';
 
 interface ActiveToolOverlayProps {
   tool: Tool;

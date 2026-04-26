@@ -1,6 +1,6 @@
 import express from "express";
 
-const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
+const DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 
 type OutputType = "text" | "research" | "caption" | "copy" | "script" | "image" | "audio" | "tts" | "video" | "pdf";
 
@@ -38,7 +38,20 @@ interface TextGenerationPayload {
 }
 
 const getOpenRouterKey = () => process.env.OPENROUTER_API_KEY || process.env.ONE_HUB_MEDIA_API;
-const getOpenRouterModel = () => process.env.OPENROUTER_TEXT_MODEL || "openrouter/auto";
+const getOpenRouterBaseUrl = () => (process.env.OPENROUTER_BASE_URL || DEFAULT_OPENROUTER_BASE_URL).replace(/\/+$/, "");
+const getOpenRouterApiUrl = () => `${getOpenRouterBaseUrl()}/chat/completions`;
+const getOpenRouterTimeoutMs = () => {
+  const timeout = Number(process.env.OPENROUTER_TIMEOUT_MS || 30000);
+  return Number.isFinite(timeout) && timeout > 0 ? timeout : 30000;
+};
+
+const getDefaultModelForType = (type: "text" | "research") => {
+  if (type === "research") {
+    return process.env.RESEARCH_MODEL || process.env.OPENROUTER_RESEARCH_MODEL || process.env.OPENROUTER_TEXT_MODEL || process.env.AI_MODEL || "openrouter/auto";
+  }
+
+  return process.env.TEXT_MODEL || process.env.OPENROUTER_TEXT_MODEL || process.env.AI_MODEL || "openrouter/auto";
+};
 
 const sendError = (res: express.Response, status: number, code: ApiErrorCode, message: string, details?: string, warnings?: string[]) => {
   const payload: ApiErrorPayload = { error: { code, message, details, warnings } };
@@ -72,17 +85,20 @@ const parseOpenRouterError = (status: number, fallbackMessage: string): { code: 
   return { code: "invalid_provider_response", message: fallbackMessage };
 };
 
-const generateTextWithOpenRouter = async (payload: TextGenerationPayload): Promise<ApiSuccess<{ text: string; model: string }>> => {
+const generateTextWithOpenRouter = async (
+  payload: TextGenerationPayload & { outputType?: "text" | "research" }
+): Promise<ApiSuccess<{ text: string; model: string }>> => {
   const openRouterKey = getOpenRouterKey();
   if (!openRouterKey) {
     throw { status: 503, code: "missing_api_key", message: "OPENROUTER_API_KEY is required for text/research generation." };
   }
 
-  const selectedModel = payload.model || getOpenRouterModel();
+  const selectedModel = payload.model || getDefaultModelForType(payload.outputType || "text");
   const model = selectedModel === "openrouter/auto" ? "openrouter/auto" : selectedModel;
 
-  const response = await fetch(OPENROUTER_API_URL, {
+  const response = await fetch(getOpenRouterApiUrl(), {
     method: "POST",
+    signal: AbortSignal.timeout(getOpenRouterTimeoutMs()),
     headers: {
       Authorization: `Bearer ${openRouterKey}`,
       "HTTP-Referer": process.env.ONE_HUB_MEDIA_REFERER || "https://one-hub-media.local",
@@ -277,7 +293,7 @@ const generatePdf = async (title: string, content: string): Promise<ApiSuccess<{
   const base64 = dataUri.split(",")[1] || "";
   const sizeBytes = Buffer.from(base64, "base64").length;
 
-  if (!dataUri.startsWith("data:application/pdf;base64,")) {
+  if (!/^data:application\/pdf(?:;[^,]*)?,/i.test(dataUri)) {
     throw { status: 502, code: "invalid_provider_response", message: "PDF generation produced invalid output." };
   }
 
@@ -305,7 +321,8 @@ const routeByType = async (type: OutputType, input: Record<string, unknown>) => 
       return generateTextWithOpenRouter({
         prompt,
         systemInstruction: parseText(input.systemInstruction) || undefined,
-        model: parseText(input.model) || undefined
+        model: parseText(input.model) || undefined,
+        outputType: type === "research" ? "research" : "text"
       });
     }
     case "image": {
@@ -370,7 +387,8 @@ export const createApiApp = () => {
       const result = await generateTextWithOpenRouter({
         prompt: `Create a concise, factual research brief about: ${prompt}`,
         systemInstruction: parseText(body.systemInstruction) || "You are a research assistant. Return JSON-safe plain text with citations where possible.",
-        model: parseText(body.model) || undefined
+        model: parseText(body.model) || undefined,
+        outputType: "research"
       });
       return res.json(result);
     } catch (error: any) {
@@ -455,7 +473,14 @@ export const createApiApp = () => {
     try {
       const body = ensureObject(req.body);
       if (!body) return sendError(res, 400, "validation_error", "Request body must be a JSON object.");
-      const result = await routeByType("text", body);
+      const prompt = parseText(body.prompt);
+      if (!prompt) return sendError(res, 400, "validation_error", "A non-empty prompt is required.");
+      const result = await generateTextWithOpenRouter({
+        prompt,
+        systemInstruction: parseText(body.systemInstruction) || undefined,
+        model: parseText(body.model) || undefined,
+        outputType: "text"
+      });
       return res.json({ text: result.data.text, model: result.data.model, warnings: result.warnings || [] });
     } catch (error: any) {
       return sendError(res, error.status || 500, error.code || "provider_server_error", error.message || "AI generation failed.", error.details, error.warnings);
@@ -466,7 +491,9 @@ export const createApiApp = () => {
     try {
       const body = ensureObject(req.body);
       if (!body) return sendError(res, 400, "validation_error", "Request body must be a JSON object.");
-      const result = await routeByType("tts", body);
+      const text = parseText(body.text);
+      if (!text) return sendError(res, 400, "validation_error", "TTS text is required.");
+      const result = await generateTtsAudio(text, parseText(body.voice) || undefined);
       return res.json({ audio: result.data.audioUrl, ...result.data, warnings: result.warnings || [] });
     } catch (error: any) {
       return sendError(res, error.status || 500, error.code || "provider_server_error", error.message || "TTS generation failed.", error.details, error.warnings);
