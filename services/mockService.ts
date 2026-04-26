@@ -1,4 +1,4 @@
-import { inferSubject, CHARACTER_A_IDS, CHARACTER_B_IDS } from '../constants';
+import { inferSubject, CHARACTER_A_IDS, CHARACTER_B_IDS, generateImageURL } from '../constants';
 import { ToolOutput, ContextBrief } from '../types';
 
 interface ApiError extends Error {
@@ -15,7 +15,7 @@ const FREE_UNAVAILABLE_TOOLS = new Set(['podcast', 'short-video']);
 
 const assertNotPlaceholder = (value: string, fieldName: string) => {
   const normalized = value.toLowerCase();
-  const blocked = ["placeholder", "lorem ipsum", "example.com", "fake", "mock"];
+  const blocked = ['placeholder', 'lorem ipsum', 'example.com', 'fake', 'mock'];
   if (blocked.some((token) => normalized.includes(token))) {
     const error = new Error(`${fieldName} contains placeholder content.`) as ApiError;
     error.code = 'invalid_provider_response';
@@ -23,13 +23,17 @@ const assertNotPlaceholder = (value: string, fieldName: string) => {
   }
 };
 
-const apiPost = async <T>(url: string, body: Record<string, unknown>): Promise<T> => {
+const apiPost = async <T>(_url: string, body: Record<string, unknown>): Promise<T> => {
   let response: Response;
+  const prompt = (typeof body.prompt === 'string' && body.prompt)
+    || (typeof body.topic === 'string' && `Provide structured research JSON for: ${body.topic}`)
+    || JSON.stringify(body);
+
   try {
-    response = await fetch(url, {
+    response = await fetch('/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
+      body: JSON.stringify({ prompt })
     });
   } catch (err: any) {
     const error = new Error(err?.message || 'Network error while calling API.') as ApiError;
@@ -40,7 +44,7 @@ const apiPost = async <T>(url: string, body: Record<string, unknown>): Promise<T
   const payload = await response.json().catch(() => null);
 
   if (!response.ok) {
-    const error = new Error(payload?.error?.message || `Request failed: ${response.status}`) as ApiError;
+    const error = new Error(payload?.error?.message || payload?.error || `Request failed: ${response.status}`) as ApiError;
     error.code = payload?.error?.code;
     error.status = response.status;
     error.details = payload?.error?.details;
@@ -55,13 +59,30 @@ const extractJson = (text: string): any => {
   return JSON.parse(cleaned);
 };
 
+const extractCompletionText = (response: any): string => {
+  const content = response?.choices?.[0]?.message?.content;
+
+  if (typeof content === 'string') {
+    return content.trim();
+  }
+
+  if (Array.isArray(content)) {
+    const joined = content
+      .map((part: any) => (typeof part?.text === 'string' ? part.text : ''))
+      .join('')
+      .trim();
+    if (joined) return joined;
+  }
+
+  return '';
+};
+
 const callTextModel = async (prompt: string, systemInstruction: string = SYSTEM_INSTRUCTION): Promise<string> => {
-  const response = await apiPost<{ data: { text: string } }>('/api/ai/text', {
-    prompt,
-    systemInstruction
+  const response = await apiPost<any>('/api/generate', {
+    prompt: `${systemInstruction}\n\n${prompt}`
   });
 
-  const text = response?.data?.text?.trim();
+  const text = extractCompletionText(response);
   if (!text) {
     const error = new Error('Provider returned empty text.') as ApiError;
     error.code = 'empty_generation_result';
@@ -73,20 +94,15 @@ const callTextModel = async (prompt: string, systemInstruction: string = SYSTEM_
 };
 
 const generateImage = async (prompt: string, width: number, height: number): Promise<string> => {
-  const response = await apiPost<{ data: { imageUrl: string } }>('/api/media/image', { prompt, width, height });
-  const url = response?.data?.imageUrl;
-  if (!url) {
-    const error = new Error('Image provider returned no image URL.') as ApiError;
-    error.code = 'empty_generation_result';
-    throw error;
-  }
+  const seed = Math.floor(Math.random() * 100000);
+  const url = generateImageURL(prompt, width, height, seed);
   assertNotPlaceholder(url, 'Image URL');
   return url;
 };
 
 export const fetchGeminiBrief = async (topic: string): Promise<ContextBrief> => {
-  const response = await apiPost<{ data: { text: string } }>('/api/ai/research', { topic });
-  const parsed = extractJson(response.data.text) as ContextBrief;
+  const text = await callTextModel(`Create JSON with keys summary, headlines[{title,source,time}], hashtags for topic: ${topic}`);
+  const parsed = extractJson(text) as ContextBrief;
   if (!parsed.summary || !parsed.headlines || !parsed.hashtags) {
     throw new Error('Research response structure is invalid.');
   }
