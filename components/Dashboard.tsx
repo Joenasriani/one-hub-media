@@ -37,10 +37,20 @@ export const Dashboard: React.FC = () => {
     setBrief(null); // Reset to show loading state or just skeleton if desired
     
     const loadBrief = async () => {
-      const data = await fetchGeminiBrief(globalTopic);
-      if (mounted) {
-        setBrief(data);
-        setInferredSubject(inferSubject(globalTopic).subject);
+      try {
+        const data = await fetchGeminiBrief(globalTopic);
+        if (mounted) {
+          setBrief(data);
+          setInferredSubject(inferSubject(globalTopic).subject);
+        }
+      } catch {
+        if (mounted) {
+          setBrief({
+            summary: 'Research temporarily unavailable. Check API configuration and retry.',
+            headlines: [],
+            hashtags: []
+          });
+        }
       }
     };
     

@@ -13,12 +13,14 @@ export const ToolCard: React.FC<ToolCardProps> = ({ tool, onClick }) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const IconComponent = (Icons as any)[tool.icon] || Icons.HelpCircle;
 
+  const isUnavailable = tool.availableInFree === false;
+
   return (
     <motion.div
-      whileHover={{ scale: 1.02, translateY: -5 }}
-      whileTap={{ scale: 0.98 }}
-      onClick={onClick}
-      className="relative group cursor-pointer"
+      whileHover={isUnavailable ? undefined : { scale: 1.02, translateY: -5 }}
+      whileTap={isUnavailable ? undefined : { scale: 0.98 }}
+      onClick={isUnavailable ? undefined : onClick}
+      className={`relative group ${isUnavailable ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}
     >
       <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 to-purple-500/10 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
       
@@ -32,7 +34,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({ tool, onClick }) => {
           
           {/* API Badge - Requirement */}
           <span className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-cyan-400 bg-cyan-900/30 border border-cyan-500/30 rounded-full shadow-[0_0_10px_rgba(6,182,212,0.1)]">
-            API
+            {isUnavailable ? 'FREE ONLY' : 'API'}
           </span>
         </div>
 
@@ -48,8 +50,8 @@ export const ToolCard: React.FC<ToolCardProps> = ({ tool, onClick }) => {
 
         {/* Footer Indicator */}
         <div className="mt-4 flex items-center text-xs text-slate-500 font-medium group-hover:text-cyan-400 transition-colors">
-          <span>Launch Tool</span>
-          <Icons.ArrowUpRight size={14} className="ml-1" />
+          <span>{isUnavailable ? 'Not available in free version' : 'Launch Tool'}</span>
+          {!isUnavailable && <Icons.ArrowUpRight size={14} className="ml-1" />}
         </div>
       </div>
     </motion.div>

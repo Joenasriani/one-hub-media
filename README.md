@@ -15,6 +15,12 @@ View your app in AI Studio: https://ai.studio/apps/2b65dd05-c32b-45cc-b659-5831e
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+2. Set the required env vars in `.env.local`:
+   - `OPENROUTER_API_KEY`
+   - `AI_MODEL=openrouter/auto`
+   - `TEXT_MODEL=openrouter/auto`
+   - `RESEARCH_MODEL=openrouter/auto`
+   - `VISION_MODEL=meta-llama/llama-3.2-vision-instruct:free`
+   - Optional image generation: `REPLICATE_API_KEY` and `IMAGE_MODEL=stability-ai/sdxl`
 3. Run the app:
    `npm run dev`
