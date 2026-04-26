@@ -112,25 +112,11 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
         return;
       }
 
-      const response = await fetch('/api/media/pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: `${tool.name} Export`,
-          content
-        })
-      });
-      const payload = await response.json().catch(() => null);
-
-      if (!response.ok || !payload?.data?.dataUrl) {
-        setErrorMessage(payload?.error?.message || 'PDF export failed.');
-        return;
-      }
-
-      const link = document.createElement('a');
-      link.href = payload.data.dataUrl;
-      link.download = payload.data.fileName || `one-hub-export-${Date.now()}.pdf`;
-      link.click();
+      const { jsPDF } = await import('jspdf');
+      const doc = new jsPDF();
+      const lines = doc.splitTextToSize(content, 180);
+      doc.text(lines, 15, 20);
+      doc.save(`one-hub-export-${Date.now()}.pdf`);
     } catch (e: any) {
       setErrorMessage(e?.message || 'PDF export failed.');
     }
