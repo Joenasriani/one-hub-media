@@ -12,7 +12,16 @@ Return raw JSON only, no markdown or code fences.
 Do not hallucinate URLs or files.
 If facts are uncertain, clearly state uncertainty inside JSON fields.`;
 
-const parseJson = (text: string) => JSON.parse(text.replace(/```json|```/g, '').trim());
+const parseJson = (text: string) => {
+  const cleaned = text.replace(/```json|```/g, '').trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    const match = cleaned.match(/\{[\s\S]*\}$/);
+    if (!match) throw new Error('Provider returned non-JSON content.');
+    return JSON.parse(match[0]);
+  }
+};
 
 const apiPost = async <T>(url: string, body: Record<string, unknown>): Promise<T> => {
   const response = await fetch(url, {
@@ -23,7 +32,9 @@ const apiPost = async <T>(url: string, body: Record<string, unknown>): Promise<T
 
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
-    const error = new Error(payload?.error?.message || `Request failed (${response.status})`) as ApiError;
+    const providerMessage = payload?.error?.message || `Request failed (${response.status})`;
+    const providerDetails = payload?.error?.details ? ` Details: ${payload.error.details}` : '';
+    const error = new Error(`${providerMessage}${providerDetails}`) as ApiError;
     error.code = payload?.error?.code;
     error.status = response.status;
     error.details = payload?.error?.details;
