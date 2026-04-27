@@ -11,6 +11,8 @@ For reliable production behavior, configure environment variables in all relevan
 ## Core variables
 
 - `OPENROUTER_API_KEY` (required)
+- `OPENROUTER_SITE_URL=https://<your-production-domain>` (recommended for OpenRouter attribution and routing)
+- `OPENROUTER_APP_NAME=One Hub Media` (recommended for OpenRouter attribution)
 - `AI_MODEL=openrouter/auto` (fallback model)
 - `TEXT_MODEL=openrouter/auto` (text route model)
 - `RESEARCH_MODEL=openrouter/auto` (research route model)
@@ -25,3 +27,5 @@ For reliable production behavior, configure environment variables in all relevan
 2. Text/research/vision generation use OpenRouter with `POST https://openrouter.ai/api/v1/chat/completions`.
 3. Image generation is only available when `REPLICATE_API_KEY` is set; audio and video are intentionally disabled in the free version.
 4. Never expose secret keys in `NEXT_PUBLIC_*` or other client-exposed variables.
+5. `OPENROUTER_API_KEY` must be the raw key string only (no `Bearer ` prefix, no quotes).
+6. If you see `User not found`, the key is invalid/revoked or belongs to a different OpenRouter account; generate a fresh key and redeploy.

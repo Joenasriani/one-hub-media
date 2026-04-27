@@ -40,6 +40,7 @@ interface TextGenerationPayload {
   model?: string;
   outputType?: "text" | "research" | "vision";
   imageUrl?: string;
+  requireJsonResponse?: boolean;
 }
 
 const getOpenRouterKey = () => aiProviderConfig.openRouter.apiKey;
@@ -118,11 +119,14 @@ const generateOpenRouterText = async (
     signal: AbortSignal.timeout(getOpenRouterTimeoutMs()),
     headers: {
       Authorization: `Bearer ${openRouterKey}`,
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      "HTTP-Referer": process.env.OPENROUTER_SITE_URL || "https://one-hub-media.vercel.app",
+      "X-Title": process.env.OPENROUTER_APP_NAME || "One Hub Media"
     },
     body: JSON.stringify({
       model,
-      messages: buildChatMessages(payload)
+      messages: buildChatMessages(payload),
+      ...(payload.requireJsonResponse ? { response_format: { type: "json_object" } } : {})
     })
   });
 
@@ -305,9 +309,12 @@ const routeByType = async (type: OutputType, input: Record<string, unknown>) => 
       if (!prompt) throw { status: 400, code: "validation_error", message: "Research topic is required." };
       return generateOpenRouterText({
         prompt: `Create a concise, factual research brief about: ${prompt}`,
-        systemInstruction: parseText(input.systemInstruction) || "You are a research assistant. Return JSON-safe plain text with citations where possible.",
+        systemInstruction:
+          parseText(input.systemInstruction) ||
+          "You are a research assistant. Return valid JSON only with keys summary, headlines (array of {title,source,time}), hashtags (array of strings). No markdown.",
         model: parseText(input.model) || undefined,
-        outputType: "research"
+        outputType: "research",
+        requireJsonResponse: true
       });
     }
 
