@@ -5,25 +5,25 @@ export const MOCK_AUDIO_BLOB = "https://actions.google.com/sounds/v1/science_fic
 
 export const TOOLS: Tool[] = [
   // Creation
-  { id: 'blog-studio', name: 'Interactive Blog Studio', category: 'Creation', description: 'Generate viral blog posts with imagery.', icon: 'PenTool' },
-  { id: 'storyboard', name: 'Cinematic Storyboard', category: 'Creation', description: 'Visualise scripts with 4-panel scenes.', icon: 'Film' },
-  { id: 'podcast', name: 'Podcast Generator', category: 'Creation', description: 'Not available in free version', icon: 'Mic', availableInFree: false },
-  { id: 'ad-creator', name: 'Ad Post Creator', category: 'Creation', description: 'High-conversion social ads.', icon: 'Megaphone' },
-  { id: 'podcaster-shots', name: 'Podcaster Shots', category: 'Creation', description: 'Studio-quality promo images.', icon: 'Camera' },
+  { id: 'blog-studio', name: 'Interactive Blog Studio', category: 'Creation', description: 'Generate viral blog posts with imagery.', icon: 'PenTool', requiredCapabilities: ['text', 'image'] },
+  { id: 'storyboard', name: 'Cinematic Storyboard', category: 'Creation', description: 'Visualise scripts with 4-panel scenes.', icon: 'Film', requiredCapabilities: ['text', 'image'] },
+  { id: 'podcast', name: 'Podcast Generator', category: 'Creation', description: 'Podcast flow requires audio + TTS providers.', icon: 'Mic', availableInFree: false, requiredCapabilities: ['audio', 'tts'] },
+  { id: 'ad-creator', name: 'Ad Post Creator', category: 'Creation', description: 'High-conversion social ads.', icon: 'Megaphone', requiredCapabilities: ['text', 'image'] },
+  { id: 'podcaster-shots', name: 'Podcaster Shots', category: 'Creation', description: 'Studio-quality promo images.', icon: 'Camera', requiredCapabilities: ['image'] },
   
   // Strategy
-  { id: 'landing-page', name: 'Landing Page Architect', category: 'Strategy', description: 'AIDA structured wireframes.', icon: 'Layout' },
-  { id: 'campaign-master', name: 'Campaign Targeting Master', category: 'Strategy', description: 'Audience segmentation reports.', icon: 'Target' },
-  { id: 'email-sequence', name: 'Email Sequence Builder', category: 'Strategy', description: 'Drip campaigns that convert.', icon: 'Mail' },
+  { id: 'landing-page', name: 'Landing Page Architect', category: 'Strategy', description: 'AIDA structured wireframes.', icon: 'Layout', requiredCapabilities: ['text'] },
+  { id: 'campaign-master', name: 'Campaign Targeting Master', category: 'Strategy', description: 'Audience segmentation reports.', icon: 'Target', requiredCapabilities: ['text', 'research'] },
+  { id: 'email-sequence', name: 'Email Sequence Builder', category: 'Strategy', description: 'Drip campaigns that convert.', icon: 'Mail', requiredCapabilities: ['text'] },
   
   // Wildcard
-  { id: 'meme-lord', name: 'The Meme Lord', category: 'Wildcard', description: 'Viral humor concepts.', icon: 'Smile' },
-  { id: 'devils-advocate', name: 'The Devil\'s Advocate', category: 'Wildcard', description: 'Ruthless critique of your ideas.', icon: 'AlertTriangle' },
-  { id: 'quiz-magnet', name: 'The Quiz Magnet', category: 'Wildcard', description: 'Engagement quizzes.', icon: 'HelpCircle' },
+  { id: 'meme-lord', name: 'The Meme Lord', category: 'Wildcard', description: 'Viral humor concepts.', icon: 'Smile', requiredCapabilities: ['text', 'image'] },
+  { id: 'devils-advocate', name: 'The Devil\'s Advocate', category: 'Wildcard', description: 'Ruthless critique of your ideas.', icon: 'AlertTriangle', requiredCapabilities: ['text'] },
+  { id: 'quiz-magnet', name: 'The Quiz Magnet', category: 'Wildcard', description: 'Engagement quizzes.', icon: 'HelpCircle', requiredCapabilities: ['text'] },
 
   // Misc
-  { id: 'short-video', name: 'Short Video Generator', category: 'Misc', description: 'Not available in free version', icon: 'Video', availableInFree: false },
-  { id: 'carousel', name: 'LinkedIn/IG Carousel', category: 'Misc', description: 'Slide deck generation.', icon: 'Layers' },
+  { id: 'short-video', name: 'Short Video Generator', category: 'Misc', description: 'Short-form generation requires a video provider.', icon: 'Video', availableInFree: false, requiredCapabilities: ['video'] },
+  { id: 'carousel', name: 'LinkedIn/IG Carousel', category: 'Misc', description: 'Slide deck generation.', icon: 'Layers', requiredCapabilities: ['text', 'image'] },
 ];
 
 // TEXT ENGINE: SANITIZATION

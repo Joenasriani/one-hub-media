@@ -1,4 +1,16 @@
 
+export type CapabilityKey = 'text' | 'research' | 'image' | 'audio' | 'video' | 'tts' | 'ocr';
+export type CapabilityStatus = 'available' | 'not_configured' | 'requires_external_provider' | 'failed';
+
+export interface CapabilityInfo {
+  status: CapabilityStatus;
+  provider: string;
+  model?: string;
+  message?: string;
+}
+
+export type CapabilitiesMap = Record<CapabilityKey, CapabilityInfo>;
+
 export interface Tool {
   id: string;
   name: string;
@@ -6,6 +18,7 @@ export interface Tool {
   description: string;
   icon: string;
   availableInFree?: boolean;
+  requiredCapabilities?: CapabilityKey[];
 }
 
 export interface ContextBrief {
@@ -44,6 +57,12 @@ export interface MockResponse {
   data: ToolOutput;
 }
 
+export interface ProviderDefaults {
+  openRouterBaseUrl: string;
+  aiModel: string;
+  timeoutMs: number;
+}
+
 export interface AppContextType {
   globalTopic: string;
   setGlobalContext: (topic: string) => void;
@@ -52,4 +71,8 @@ export interface AppContextType {
   setIsGenerating: (loading: boolean) => void;
   activeTool: Tool | null;
   setActiveTool: (tool: Tool | null) => void;
+  capabilities: CapabilitiesMap | null;
+  capabilityFetchError: string | null;
+  providerDefaults: ProviderDefaults | null;
+  refreshCapabilities: () => Promise<void>;
 }

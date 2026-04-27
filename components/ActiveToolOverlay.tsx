@@ -14,7 +14,7 @@ interface ActiveToolOverlayProps {
 }
 
 export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onClose }) => {
-  const { globalTopic, themeAccent, setIsGenerating } = useApp();
+  const { globalTopic, themeAccent, setIsGenerating, capabilities } = useApp();
   
   const [result, setResult] = useState<ToolOutput | null>(null);
   const [loading, setLoading] = useState(false);
@@ -32,7 +32,10 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
   const [regenKey, setRegenKey] = useState(0);
 
   const exportRef = useRef<HTMLDivElement>(null);
-  const isUnavailableInFree = tool.availableInFree === false;
+  const required = tool.requiredCapabilities || ['text'];
+  const unavailableCapability = required.find((capability) => !capabilities || capabilities[capability]?.status !== 'available');
+  const unavailableInfo = unavailableCapability && capabilities ? capabilities[unavailableCapability] : null;
+  const isUnavailableInFree = Boolean(unavailableCapability);
 
   const handleGenerate = async () => {
     setLoading(true);
@@ -48,7 +51,7 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
     try {
       // Pass storyboard frames if applicable
       const options = { frameCount: storyboardFrames };
-      const data = await generateContent(tool.id, globalTopic, options);
+      const data = await generateContent(tool, globalTopic, capabilities, options);
       setResult(data);
       if (tool.id === 'storyboard') setStoryboardGenerated(true);
     } catch (error: any) {
@@ -72,7 +75,7 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
       handleGenerate();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isUnavailableInFree]);
+  }, [isUnavailableInFree, tool.id]);
 
   if (isUnavailableInFree) {
     return (
@@ -87,7 +90,7 @@ export const ActiveToolOverlay: React.FC<ActiveToolOverlayProps> = ({ tool, onCl
             <button onClick={onClose}><X className="text-slate-400" /></button>
           </div>
           <p className="text-slate-300 text-sm leading-relaxed mb-8">
-            Not available in free version.
+            {unavailableInfo?.message || `${unavailableCapability} is not available for this tool.`}
           </p>
           <Button onClick={onClose} className="w-full py-4 text-lg">Close</Button>
         </motion.div>

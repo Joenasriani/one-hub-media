@@ -1,5 +1,5 @@
-import { inferSubject, CHARACTER_A_IDS, CHARACTER_B_IDS, generateImageURL } from '../constants';
-import { ToolOutput, ContextBrief } from '../types';
+import { inferSubject } from '../constants';
+import { CapabilitiesMap, CapabilityKey, ContextBrief, Tool, ToolOutput } from '../types';
 
 interface ApiError extends Error {
   code?: string;
@@ -11,40 +11,19 @@ const SYSTEM_INSTRUCTION = `You are One AI Hub, a production content engine.
 Return raw JSON only, no markdown or code fences.
 Do not hallucinate URLs or files.
 If facts are uncertain, clearly state uncertainty inside JSON fields.`;
-const FREE_UNAVAILABLE_TOOLS = new Set(['podcast', 'short-video']);
 
-const assertNotPlaceholder = (value: string, fieldName: string) => {
-  const normalized = value.toLowerCase();
-  const blocked = ['placeholder', 'lorem ipsum', 'example.com', 'fake', 'mock'];
-  if (blocked.some((token) => normalized.includes(token))) {
-    const error = new Error(`${fieldName} contains placeholder content.`) as ApiError;
-    error.code = 'invalid_provider_response';
-    throw error;
-  }
-};
+const parseJson = (text: string) => JSON.parse(text.replace(/```json|```/g, '').trim());
 
-const apiPost = async <T>(_url: string, body: Record<string, unknown>): Promise<T> => {
-  let response: Response;
-  const prompt = (typeof body.prompt === 'string' && body.prompt)
-    || (typeof body.topic === 'string' && `Provide structured research JSON for: ${body.topic}`)
-    || JSON.stringify(body);
-
-  try {
-    response = await fetch('/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt })
-    });
-  } catch (err: any) {
-    const error = new Error(err?.message || 'Network error while calling API.') as ApiError;
-    error.code = 'provider_server_error';
-    throw error;
-  }
+const apiPost = async <T>(url: string, body: Record<string, unknown>): Promise<T> => {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
 
   const payload = await response.json().catch(() => null);
-
   if (!response.ok) {
-    const error = new Error(payload?.error?.message || payload?.error || `Request failed: ${response.status}`) as ApiError;
+    const error = new Error(payload?.error?.message || `Request failed (${response.status})`) as ApiError;
     error.code = payload?.error?.code;
     error.status = response.status;
     error.details = payload?.error?.details;
@@ -54,173 +33,142 @@ const apiPost = async <T>(_url: string, body: Record<string, unknown>): Promise<
   return payload as T;
 };
 
-const extractJson = (text: string): any => {
-  const cleaned = text.replace(/```json|```/g, '').trim();
-  return JSON.parse(cleaned);
-};
+const ensureCapabilities = (tool: Tool, capabilities: CapabilitiesMap | null) => {
+  const required = tool.requiredCapabilities || ['text'];
 
-const extractCompletionText = (response: any): string => {
-  const content = response?.choices?.[0]?.message?.content;
-
-  if (typeof content === 'string') {
-    return content.trim();
+  if (!capabilities) {
+    throw new Error('Provider capabilities are unavailable. Check /api/ai/health and retry.');
   }
 
-  if (Array.isArray(content)) {
-    const joined = content
-      .map((part: any) => (typeof part?.text === 'string' ? part.text : ''))
-      .join('')
-      .trim();
-    if (joined) return joined;
+  for (const capability of required) {
+    const state = capabilities[capability as CapabilityKey];
+    if (!state || state.status !== 'available') {
+      throw new Error(state?.message || `${capability} is not available for this tool.`);
+    }
   }
-
-  return '';
 };
 
-const callTextModel = async (prompt: string, systemInstruction: string = SYSTEM_INSTRUCTION): Promise<string> => {
-  const response = await apiPost<any>('/api/generate', {
-    prompt: `${systemInstruction}\n\n${prompt}`
+const generateText = async (prompt: string): Promise<string> => {
+  const response = await apiPost<{ data: { text: string } }>('/api/ai/text', {
+    prompt,
+    systemInstruction: SYSTEM_INSTRUCTION
   });
 
-  const text = extractCompletionText(response);
-  if (!text) {
-    const error = new Error('Provider returned empty text.') as ApiError;
-    error.code = 'empty_generation_result';
-    throw error;
+  if (!response?.data?.text?.trim()) throw new Error('Provider returned empty text.');
+  return response.data.text;
+};
+
+const generateImage = async (prompt: string): Promise<string> => {
+  const response = await apiPost<{ data: { imageUrl: string } }>('/api/media/image', { prompt });
+  if (!response?.data?.imageUrl?.trim()) throw new Error('Provider returned empty image URL.');
+  return response.data.imageUrl;
+};
+
+export const fetchGeminiBrief = async (topic: string, capabilities: CapabilitiesMap | null): Promise<ContextBrief> => {
+  if (!capabilities?.research || capabilities.research.status !== 'available') {
+    throw new Error(capabilities?.research?.message || 'Research provider is not configured.');
   }
 
-  assertNotPlaceholder(text, 'Generated text');
-  return text;
-};
+  const response = await apiPost<{ data: { text: string } }>('/api/ai/research', {
+    topic,
+    systemInstruction: `${SYSTEM_INSTRUCTION}\nReturn JSON with keys summary, headlines[{title,source,time}], hashtags.`
+  });
 
-const generateImage = async (prompt: string, width: number, height: number): Promise<string> => {
-  const seed = Math.floor(Math.random() * 100000);
-  const url = generateImageURL(prompt, width, height, seed);
-  assertNotPlaceholder(url, 'Image URL');
-  return url;
-};
-
-export const fetchGeminiBrief = async (topic: string): Promise<ContextBrief> => {
-  const text = await callTextModel(`Create JSON with keys summary, headlines[{title,source,time}], hashtags for topic: ${topic}`);
-  const parsed = extractJson(text) as ContextBrief;
-  if (!parsed.summary || !parsed.headlines || !parsed.hashtags) {
+  const parsed = parseJson(response.data.text) as ContextBrief;
+  if (!parsed?.summary || !Array.isArray(parsed?.headlines) || !Array.isArray(parsed?.hashtags)) {
     throw new Error('Research response structure is invalid.');
   }
+
   return parsed;
 };
 
-export const generateContent = async (toolId: string, prompt: string, options?: any): Promise<ToolOutput> => {
-  if (FREE_UNAVAILABLE_TOOLS.has(toolId)) {
-    throw new Error('Not available in free version');
-  }
+export const generateContent = async (tool: Tool, prompt: string, capabilities: CapabilitiesMap | null, options?: any): Promise<ToolOutput> => {
+  ensureCapabilities(tool, capabilities);
 
   const { subject, keywords } = inferSubject(prompt);
 
-  if (toolId === 'blog-studio') {
-    const aiPrompt = `Act as an expert copywriter. Write a complex blog post about "${subject}".
-Return JSON with {"ideas":[],"finalPost":{"title":"","subtitle":"","blocks":[]}}`;
-    const [text, imageUrl] = await Promise.all([
-      callTextModel(aiPrompt),
-      generateImage(`Cinematic professional header for ${subject}, ${keywords}`, 1200, 600)
-    ]);
-
-    const payload = extractJson(text);
-    payload.type = 'blog';
-    payload.finalPost.imageUrl = imageUrl;
-    return payload as ToolOutput;
+  if (tool.id === 'blog-studio') {
+    const text = await generateText(`Act as an expert copywriter. Write a complex blog post about "${subject}". Return JSON with {"ideas":[],"finalPost":{"title":"","subtitle":"","blocks":[]}}`);
+    const imageUrl = await generateImage(`Cinematic professional header for ${subject}, ${keywords}`);
+    const payload = parseJson(text);
+    return { ...payload, type: 'blog', finalPost: { ...payload.finalPost, imageUrl } } as ToolOutput;
   }
 
-  if (toolId === 'storyboard') {
+  if (tool.id === 'storyboard') {
     const count = options?.frameCount || 4;
-    const aiPrompt = `Create a ${count}-frame cinematic storyboard about "${subject}". Return JSON {"scenes":[{"description":""}]}`;
-    const text = await callTextModel(aiPrompt);
-    const payload = extractJson(text);
-
-    if (!Array.isArray(payload.scenes) || payload.scenes.length === 0) {
-      throw new Error('Storyboard scenes are missing.');
-    }
-
+    const text = await generateText(`Create a ${count}-frame cinematic storyboard about "${subject}". Return JSON {"scenes":[{"description":""}]}`);
+    const payload = parseJson(text);
     const scenes = await Promise.all(
-      payload.scenes.map(async (scene: { description: string }, index: number) => ({
+      (payload.scenes || []).map(async (scene: { description: string }, index: number) => ({
         description: scene.description,
-        imageUrl: await generateImage(`Cinematic storyboard scene ${index + 1} about ${subject}, ${keywords}, dramatic lighting`, 800, 450)
+        imageUrl: await generateImage(`Cinematic storyboard scene ${index + 1} about ${subject}, ${keywords}`)
       }))
     );
-
     return { type: 'storyboard', scenes };
   }
 
-  if (toolId === 'ad-creator') {
-    const text = await callTextModel(`Create high-conversion ad copy for "${subject}". Return JSON with headline and cta.`);
-    const payload = extractJson(text);
-    const imageUrl = await generateImage(`Vertical high-end advertisement visual for ${subject}`, 1080, 1920);
+  if (tool.id === 'ad-creator') {
+    const text = await generateText(`Create high-conversion ad copy for "${subject}". Return JSON with headline and cta.`);
+    const payload = parseJson(text);
+    const imageUrl = await generateImage(`Vertical high-end advertisement visual for ${subject}`);
     return { type: 'ad', headline: payload.headline, cta: payload.cta, imageUrl };
   }
 
-  if (toolId === 'devils-advocate' || toolId === 'campaign-master') {
-    const text = await callTextModel(`Create a strategy critique for "${subject}". Return JSON with title and sections.`);
-    const payload = extractJson(text);
+  if (tool.id === 'devils-advocate' || tool.id === 'campaign-master') {
+    const text = await generateText(`Create a strategy critique for "${subject}". Return JSON with title and sections.`);
+    const payload = parseJson(text);
     return { type: 'strategy', title: payload.title, sections: payload.sections };
   }
 
-  if (toolId === 'quiz-magnet') {
-    const text = await callTextModel(`Create a 3-question quiz about "${subject}". Return JSON with questions.`);
-    const payload = extractJson(text);
-    return { type: 'quiz', questions: payload.questions };
+  if (tool.id === 'quiz-magnet') {
+    const text = await generateText(`Create a 3-question quiz about "${subject}". Return JSON with questions.`);
+    return { type: 'quiz', questions: parseJson(text).questions };
   }
 
-  if (toolId === 'landing-page') {
-    const text = await callTextModel(`Design a landing page wireframe for "${subject}". Return JSON with sections.`);
-    const payload = extractJson(text);
-    const heroImageUrl = await generateImage(`Cinematic hero visual for ${subject}, ${keywords}`, 1200, 800);
-    return { type: 'landing', sections: payload.sections, heroImageUrl } as ToolOutput;
+  if (tool.id === 'landing-page') {
+    const text = await generateText(`Design a landing page wireframe for "${subject}". Return JSON with sections.`);
+    return { type: 'landing', sections: parseJson(text).sections } as ToolOutput;
   }
 
-  if (toolId === 'email-sequence') {
-    const text = await callTextModel(`Write a 3-email drip sequence for "${subject}". Return JSON with emails.`);
-    const payload = extractJson(text);
-    return { type: 'email', emails: payload.emails };
+  if (tool.id === 'email-sequence') {
+    const text = await generateText(`Write a 3-email drip sequence for "${subject}". Return JSON with emails.`);
+    return { type: 'email', emails: parseJson(text).emails };
   }
 
-  if (toolId === 'carousel') {
-    const text = await callTextModel(`Create a 5-slide LinkedIn carousel about "${subject}". Return JSON with slides.`);
-    const payload = extractJson(text);
+  if (tool.id === 'carousel') {
+    const text = await generateText(`Create a 5-slide LinkedIn carousel about "${subject}". Return JSON with slides.`);
+    const payload = parseJson(text);
     const slides = await Promise.all(
-      payload.slides.map(async (slide: { title: string; content: string; color: string }) => ({
+      (payload.slides || []).map(async (slide: { title: string; content: string; color: string }) => ({
         ...slide,
-        imageUrl: await generateImage(`Presentation slide about ${subject}, ${keywords}`, 1080, 1350)
+        imageUrl: await generateImage(`Presentation slide about ${subject}, ${keywords}`)
       }))
     );
     return { type: 'carousel', slides } as ToolOutput;
   }
 
-  if (toolId === 'meme-lord') {
-    const text = await callTextModel(`Create 3 meme concepts about "${subject}". Return JSON with memes [{topText,bottomText}].`);
-    const payload = extractJson(text);
+  if (tool.id === 'meme-lord') {
+    const text = await generateText(`Create 3 meme concepts about "${subject}". Return JSON with memes [{topText,bottomText}].`);
+    const payload = parseJson(text);
     const memes = await Promise.all(
-      payload.memes.map(async (meme: { topText: string; bottomText: string }) => ({
+      (payload.memes || []).map(async (meme: { topText: string; bottomText: string }) => ({
         ...meme,
-        imageUrl: await generateImage(`Meme template visual about ${subject}, ${keywords}`, 500, 500)
+        imageUrl: await generateImage(`Meme template visual about ${subject}, ${keywords}`)
       }))
     );
     return { type: 'meme', memes };
   }
 
-  if (toolId === 'podcaster-shots') {
+  if (tool.id === 'podcaster-shots') {
     const prompts = [
       `Studio portrait host A about ${subject}`,
       `Studio portrait host B about ${subject}`,
       `Podcast recording scene for ${subject}`,
       `Podcast behind-the-scenes for ${subject}`
     ];
-
-    const images = await Promise.all(prompts.map((imagePrompt) => generateImage(imagePrompt, 600, 800)));
-    return {
-      type: 'podcaster',
-      characterA: [images[0], images[2] || CHARACTER_A_IDS[0]],
-      characterB: [images[1], images[3] || CHARACTER_B_IDS[0]]
-    };
+    const images = await Promise.all(prompts.map((imagePrompt) => generateImage(imagePrompt)));
+    return { type: 'podcaster', characterA: [images[0], images[2]], characterB: [images[1], images[3]] };
   }
 
-  throw new Error(`Unsupported tool: ${toolId}`);
+  throw new Error(`Unsupported tool: ${tool.id}`);
 };

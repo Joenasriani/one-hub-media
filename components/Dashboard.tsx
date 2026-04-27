@@ -9,12 +9,13 @@ import { ActiveToolOverlay } from './ActiveToolOverlay';
 import { useApp } from '../context/AppContext';
 
 export const Dashboard: React.FC = () => {
-  const { globalTopic, setGlobalContext, themeAccent, activeTool, setActiveTool } = useApp();
+  const { globalTopic, setGlobalContext, themeAccent, activeTool, setActiveTool, capabilities, capabilityFetchError, providerDefaults } = useApp();
   const [filter, setFilter] = useState('All');
   const [isEditing, setIsEditing] = useState(false);
   const [inputValue, setInputValue] = useState(globalTopic);
   
   const [brief, setBrief] = useState<ContextBrief | null>(null);
+  const [briefError, setBriefError] = useState<string | null>(null);
   const [inferredSubject, setInferredSubject] = useState(inferSubject(globalTopic).subject);
 
   const categories = ['All', 'Creation', 'Strategy', 'Wildcard', 'Misc'];
@@ -38,25 +39,23 @@ export const Dashboard: React.FC = () => {
     
     const loadBrief = async () => {
       try {
-        const data = await fetchGeminiBrief(globalTopic);
+        const data = await fetchGeminiBrief(globalTopic, capabilities);
         if (mounted) {
           setBrief(data);
+          setBriefError(null);
           setInferredSubject(inferSubject(globalTopic).subject);
         }
-      } catch {
+      } catch (error: any) {
         if (mounted) {
-          setBrief({
-            summary: 'Research temporarily unavailable. Check API configuration and retry.',
-            headlines: [],
-            hashtags: []
-          });
+          setBrief(null);
+          setBriefError(error?.message || 'Research temporarily unavailable.');
         }
       }
     };
     
     loadBrief();
     return () => { mounted = false; };
-  }, [globalTopic]);
+  }, [globalTopic, capabilities]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -131,7 +130,7 @@ export const Dashboard: React.FC = () => {
             </div>
             <h2 className="text-xl font-bold text-white mb-3 capitalize truncate">{inferredSubject}</h2>
             <p className="text-slate-400 text-sm leading-relaxed border-l-2 border-white/10 pl-4">
-              {brief ? brief.summary : <span className="animate-pulse">Analyzing global data...</span>}
+              {brief ? brief.summary : briefError ? briefError : <span className="animate-pulse">Analyzing global data...</span>}
             </p>
           </div>
 
@@ -154,7 +153,9 @@ export const Dashboard: React.FC = () => {
                     <span className="text-[10px] text-slate-600">{news.time}</span>
                   </div>
                 </div>
-              )) : (
+              )) : briefError ? (
+                <p className="text-sm text-rose-300">{briefError}</p>
+              ) : (
                 <div className="space-y-4 animate-pulse">
                    {[1,2,3].map(i => <div key={i} className="h-4 bg-white/5 rounded w-3/4"/>)}
                 </div>
@@ -174,7 +175,9 @@ export const Dashboard: React.FC = () => {
                  <span key={i} className="px-3 py-1.5 bg-black/30 hover:bg-white/10 rounded-full border border-white/5 text-xs font-mono text-slate-400 hover:text-white hover:border-white/20 transition-all cursor-default">
                     {tag}
                  </span>
-               )) : (
+               )) : briefError ? (
+                 <span className="text-xs text-rose-300">{briefError}</span>
+               ) : (
                  <div className="flex gap-2 animate-pulse">
                     <div className="h-6 w-16 bg-white/5 rounded-full" />
                     <div className="h-6 w-20 bg-white/5 rounded-full" />
@@ -184,6 +187,18 @@ export const Dashboard: React.FC = () => {
           </div>
         </motion.div>
 
+        {(capabilityFetchError || providerDefaults) && (
+          <div className="mb-6 rounded-xl border border-white/10 bg-slate-900/60 p-4 text-xs text-slate-300">
+            {capabilityFetchError ? (
+              <span className="text-rose-300">{capabilityFetchError}</span>
+            ) : (
+              <span>
+                Router default model: <strong>{providerDefaults?.aiModel}</strong> via {providerDefaults?.openRouterBaseUrl}
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Tool Grid */}
         <motion.div layout className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           <AnimatePresence>
@@ -191,6 +206,7 @@ export const Dashboard: React.FC = () => {
               <ToolCard 
                 key={tool.id} 
                 tool={tool} 
+                capabilities={capabilities}
                 onClick={() => setActiveTool(tool)} 
               />
             ))}

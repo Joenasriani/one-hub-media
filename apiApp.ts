@@ -1,7 +1,8 @@
 import express from "express";
 
-const OPENROUTER_CHAT_COMPLETIONS_URL = "https://openrouter.ai/api/v1/chat/completions";
-const OPENROUTER_TIMEOUT_MS = 30000;
+import { aiProviderConfig, getCapabilities } from "./config/aiProvider";
+
+const OPENROUTER_CHAT_COMPLETIONS_URL = `${aiProviderConfig.openRouter.baseUrl}/chat/completions`;
 const REPLICATE_API_BASE_URL = "https://api.replicate.com/v1";
 
 type OutputType = "text" | "research" | "vision" | "caption" | "copy" | "script" | "image" | "audio" | "tts" | "video" | "pdf";
@@ -41,17 +42,14 @@ interface TextGenerationPayload {
   imageUrl?: string;
 }
 
-const getOpenRouterKey = () => process.env.OPENROUTER_API_KEY;
-const getOpenRouterTimeoutMs = () => {
-  const timeout = Number(process.env.OPENROUTER_TIMEOUT_MS || OPENROUTER_TIMEOUT_MS);
-  return Number.isFinite(timeout) && timeout > 0 ? timeout : OPENROUTER_TIMEOUT_MS;
-};
+const getOpenRouterKey = () => aiProviderConfig.openRouter.apiKey;
+const getOpenRouterTimeoutMs = () => aiProviderConfig.openRouter.timeoutMs;
 
 const getModelForType = (type: "text" | "research" | "vision" | "fallback") => {
-  if (type === "text") return process.env.TEXT_MODEL || process.env.AI_MODEL || "openrouter/auto";
-  if (type === "research") return process.env.RESEARCH_MODEL || process.env.AI_MODEL || "openrouter/auto";
-  if (type === "vision") return process.env.VISION_MODEL || process.env.AI_MODEL || "openrouter/auto";
-  return process.env.AI_MODEL || "openrouter/auto";
+  if (type === "text") return process.env.TEXT_MODEL || aiProviderConfig.openRouter.model;
+  if (type === "research") return process.env.RESEARCH_MODEL || aiProviderConfig.openRouter.model;
+  if (type === "vision") return process.env.VISION_MODEL || aiProviderConfig.openRouter.model;
+  return aiProviderConfig.openRouter.model;
 };
 
 const sendError = (res: express.Response, status: number, code: ApiErrorCode, message: string, details?: string, warnings?: string[]) => {
@@ -208,7 +206,7 @@ const pollReplicatePrediction = async (id: string, replicateKey: string) => {
 };
 
 const generateImageWithReplicate = async (prompt: string): Promise<ApiSuccess<{ imageUrl: string; provider: string; model: string }>> => {
-  const replicateKey = process.env.REPLICATE_API_KEY;
+  const replicateKey = aiProviderConfig.replicate.apiKey;
   if (!replicateKey) {
     throw {
       status: 503,
@@ -217,7 +215,7 @@ const generateImageWithReplicate = async (prompt: string): Promise<ApiSuccess<{ 
     };
   }
 
-  const model = process.env.IMAGE_MODEL || "stability-ai/sdxl";
+  const model = aiProviderConfig.replicate.model;
   const createResponse = await fetch(`${REPLICATE_API_BASE_URL}/predictions`, {
     method: "POST",
     headers: {
@@ -357,14 +355,12 @@ export const createApiApp = () => {
 
   app.get("/api/ai/health", (_req, res) => {
     return res.json({
-      openRouterConfigured: Boolean(getOpenRouterKey()),
-      replicateConfigured: Boolean(process.env.REPLICATE_API_KEY),
-      textModel: getModelForType("text"),
-      researchModel: getModelForType("research"),
-      visionModel: getModelForType("vision"),
-      imageModel: process.env.IMAGE_MODEL || "stability-ai/sdxl",
-      audioSupported: false,
-      videoSupported: false,
+      providerDefaults: {
+        openRouterBaseUrl: aiProviderConfig.openRouter.baseUrl,
+        aiModel: aiProviderConfig.openRouter.model,
+        timeoutMs: aiProviderConfig.openRouter.timeoutMs
+      },
+      capabilities: getCapabilities(),
       pdfGenerationAvailable: true
     });
   });
