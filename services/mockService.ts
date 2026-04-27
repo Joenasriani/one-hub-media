@@ -23,20 +23,32 @@ const assertNotPlaceholder = (value: string, fieldName: string) => {
   }
 };
 
+const API_GENERATE_ENDPOINTS = ['/api/ai/generate', '/api/generate'];
+
 const apiPost = async <T>(_url: string, body: Record<string, unknown>): Promise<T> => {
-  let response: Response;
+  let response: Response | null = null;
   const prompt = (typeof body.prompt === 'string' && body.prompt)
     || (typeof body.topic === 'string' && `Provide structured research JSON for: ${body.topic}`)
     || JSON.stringify(body);
 
   try {
-    response = await fetch('/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt })
-    });
+    for (const endpoint of API_GENERATE_ENDPOINTS) {
+      response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt })
+      });
+
+      if (response.status !== 404) break;
+    }
   } catch (err: any) {
     const error = new Error(err?.message || 'Network error while calling API.') as ApiError;
+    error.code = 'provider_server_error';
+    throw error;
+  }
+
+  if (!response) {
+    const error = new Error('No API endpoint responded.') as ApiError;
     error.code = 'provider_server_error';
     throw error;
   }
@@ -60,6 +72,14 @@ const extractJson = (text: string): any => {
 };
 
 const extractCompletionText = (response: any): string => {
+  if (typeof response?.text === 'string' && response.text.trim()) {
+    return response.text.trim();
+  }
+
+  if (typeof response?.data?.text === 'string' && response.data.text.trim()) {
+    return response.data.text.trim();
+  }
+
   const content = response?.choices?.[0]?.message?.content;
 
   if (typeof content === 'string') {
