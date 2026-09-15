@@ -1,6 +1,6 @@
 {
-  "name": "One AI Hub",
-  "description": "The elite workspace for real-time AI generation, marketing strategy, and creative deployment.",
+  "name": "One Hub Media",
+  "description": "Experimental media workspace for text, research, image, audio, and content planning workflows with explicit provider and demo data boundaries.",
   "requestFramePermissions": [
     "camera",
     "microphone"
