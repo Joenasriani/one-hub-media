@@ -1,26 +1,39 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# One Hub Media
 
-# Run and deploy your AI Studio app
+**Author:** Joe Nasr  
+**Canonical identity:** https://joe-nasr-signals.vercel.app/v2/
 
-This contains everything you need to run your app locally.
+One Hub Media is an experimental browser workspace that groups text, research, image, audio, and media planning tools behind a shared topic context.
 
-View your app in AI Studio: https://ai.studio/apps/2b65dd05-c32b-45cc-b659-5831efbe287f
+## Current status
 
-## Run Locally
+Working prototype.
 
-**Prerequisites:**  Node.js
+The application includes interfaces for article drafting, storyboard planning, advertising concepts, landing page structures, campaign hypotheses, email sequences, quizzes, carousel drafts, and other media planning tasks. Provider availability depends on configured environment variables and the capability map exposed by the application.
 
+## Data boundary
 
-1. Install dependencies:
-   `npm install`
-2. Set the required env vars in `.env.local`:
-   - `OPENROUTER_API_KEY`
-   - `AI_MODEL=openrouter/auto`
-   - `TEXT_MODEL=openrouter/auto`
-   - `RESEARCH_MODEL=openrouter/auto`
-   - `VISION_MODEL=meta-llama/llama-3.2-vision-instruct:free`
-   - Optional image generation: `REPLICATE_API_KEY` and `IMAGE_MODEL=stability-ai/sdxl`
-3. Run the app:
-   `npm run dev`
+Fallback content in `constants.ts` is explicitly demo material. It must not be represented as live reporting, verified market data, published research, real user statistics, or sourced performance evidence.
+
+Live factual research requires a configured research provider and source verification. Generated copy should be treated as a draft until factual claims, dates, quotations, numbers, and named sources are checked.
+
+## Providers
+
+Primary text routing uses OpenRouter. Optional image generation can use the configured external image provider. Audio, TTS, and video tools remain unavailable unless the corresponding external provider is configured.
+
+## Local setup
+
+Prerequisite: Node.js.
+
+```bash
+npm install
+```
+
+Copy the environment template and configure the providers you intend to use.
+
+```bash
+cp .env.example .env.local
+npm run dev
+```
+
+Repository: https://github.com/Joenasriani/one-hub-media
