@@ -1,0 +1,23 @@
+# One Hub Media
+
+One Hub Media is an experimental browser workspace created by Joe Nasr for AI-assisted text, research, image, and media-planning workflows.
+
+Canonical product URL: https://one-hub-media.vercel.app/
+Source repository: https://github.com/Joenasriani/one-hub-media
+Public identity: https://joe-nasr-signals.vercel.app/v2/
+
+## Status
+
+Working prototype.
+
+Provider availability depends on configured environment variables and the application's capability map. OpenRouter is used for primary text routing. Optional image generation depends on an external image provider. Audio, TTS, and video are unavailable unless corresponding providers are configured.
+
+## Evidence boundary
+
+Fallback content is demo material. It must not be treated as live reporting, verified market data, published research, real user statistics, or sourced performance evidence.
+
+Generated factual claims, dates, quotations, numbers, and named sources require independent verification.
+
+## Provenance
+
+GitHub metadata records this repository as created from the google-gemini/aistudio-repository-template template. This provenance record does not establish that the current One Hub Media codebase or product behavior is identical to that template.
