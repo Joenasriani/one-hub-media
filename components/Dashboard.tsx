@@ -76,7 +76,7 @@ export const Dashboard: React.FC = () => {
         
         {/* Header & Search Morph */}
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
-          <h1 className="text-2xl font-bold text-white tracking-tight hidden md:block">One AI Hub</h1>
+          <h1 className="text-2xl font-bold text-white tracking-tight hidden md:block">One Hub Media</h1>
           
           {/* MORPHING SEARCH BAR */}
           <motion.form 

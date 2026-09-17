@@ -7,7 +7,7 @@ interface ApiError extends Error {
   details?: string;
 }
 
-const SYSTEM_INSTRUCTION = `You are One AI Hub, a production content engine.
+const SYSTEM_INSTRUCTION = `You are One Hub Media, a production content engine.
 Return raw JSON only, no markdown or code fences.
 Do not hallucinate URLs or files.
 If facts are uncertain, clearly state uncertainty inside JSON fields.`;
