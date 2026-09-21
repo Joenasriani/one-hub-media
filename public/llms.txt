@@ -4,7 +4,7 @@ One Hub Media is an experimental browser workspace created by Joe Nasr for AI-as
 
 Canonical product URL: https://one-hub-media.vercel.app/
 Source repository: https://github.com/Joenasriani/one-hub-media
-Public identity: https://joe-nasr-signals.vercel.app/v2/
+Public identity: https://joe-nasr-signals.vercel.app/
 
 ## Status
 
