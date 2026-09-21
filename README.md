@@ -1,7 +1,7 @@
 # One Hub Media
 
 **Author:** Joe Nasr  
-**Identity:** https://joe-nasr-signals.vercel.app/v2/
+**Identity:** https://joe-nasr-signals.vercel.app/
 **Live app:** https://one-hub-media.vercel.app/
 
 One Hub Media is an experimental browser workspace that groups text, research, image, audio, and media planning tools behind a shared topic context.
